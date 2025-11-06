@@ -236,5 +236,5 @@ jobs:
                   parameters: >
                       managedIdentityLocation=${{ env.LOCATION }}
                       @infra/parameters/policy-dev.parameters.json
-                  deploymentName: policy-guardrails-${{ github.run_number }}
+                  deploymentName: policy-guardrails-${{ env.LOCATION }}-${{ github.run_number }}
                   failOnStdErr: false
