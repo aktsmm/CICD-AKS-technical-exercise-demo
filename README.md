@@ -42,6 +42,7 @@
 ```
 
 - AKS は Azure CNI (VNet 統合) を利用し、`snet-aks` に直接 Pod IP を割り当てます。MongoDB VM は別サブネットに隔離し、NSG でアクセス制御を行います。
+- Ingress Controller は Azure Public Load Balancer のグローバル IP を使用しており、公式解説どおりインターネットから直接トラフィックを受ける構成になっています ([Azure Load Balancer の概要](https://learn.microsoft.com/ja-jp/azure/networking/load-balancer-content-delivery/load-balancing-content-delivery-overview))。演習では公開状態を保ったまま、後述の改善案で Internal Load Balancer + WAF への多層防御移行を検討する前提です。
 - バックアップ用 Storage Account は一部脆弱な設定 (HTTP 許可など) を残しており、セキュリティスキャン教材として活用します。
 - サブスクリプションレベルで Azure Policy を割り当て、Log Analytics へ診断ログを集約することで監査性を高めています。
 
@@ -367,7 +368,7 @@ CICD-AKS-technical-exercise/
 ## 今後の改善点 - DevOps / DevSecOps
 
 - GitHub OIDC を導入して Service Principal シークレットを廃止し、シークレット管理負荷を削減する。
-- Ingress Controller を Internal Load Balancer 化し、Application Gateway や Azure Front Door と組み合わせて多層防御を構築する。
+- Ingress Controller を Internal Load Balancer 化し、Application Gateway (リージョン内の WAF/ルーティング) や Azure Front Door (グローバル WAF/DDoS 緩和) を前段に置いて多層防御を構築する。ILB のプライベート IP を Application Gateway のバックエンド プールへ割り当て、外部公開は Front Door / Application Gateway に限定する形にする。
 - セキュリティスキャンを段階的に fail-fast 化し、許容ポリシーや Allowlist を整備したうえで CRITICAL / HIGH 検出時にデプロイを停止させる。
 - Azure Policy を強化し、SSH 公開や HTTP 許可などの脆弱設定をステージング → 本番の順に段階的に禁止する。
 - AKS Workload Identity と Namespaced RBAC を導入し、Pod 単位で最小権限を徹底する。
