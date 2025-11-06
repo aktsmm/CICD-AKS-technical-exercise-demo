@@ -13,18 +13,15 @@ logs/
 *.log
 
 # Secrets and credentials (DO NOT COMMIT)
-docs/AZURE_SETUP_INFO.md
 mongo_password.txt
 *.secret
 *.credentials
 .env
 *.env
 
-# 機密情報管理ディレクトリ (Phase 1 で追加)
+# ドキュメントディレクトリ (プロジェクト固有情報を含むため非公開)
+docs/
 Docs_Secrets/
 Docs_issue_point/
 Docs_work_history/
-
-# プロジェクト内部ドキュメント (外部公開不要)
-docs/
-Docs_issue_point/
+README_Prompt.md

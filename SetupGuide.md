@@ -166,6 +166,7 @@ gh auth login
 **方法 1: GitHub CLI を使用（推奨）**
 
 > ⚠️ **重要な注意事項:**
+>
 > - 複数のリモートリポジトリがある場合は、すべてのコマンドに `-R <owner>/<repo>` オプションを付けてください
 > - コマンド実行後は必ず `gh secret list` と `gh variable list` で設定を確認してください
 > - `AZURE_SUBSCRIPTION_ID` が設定されていないとワークフローが失敗します
@@ -225,6 +226,7 @@ foreach ($secret in $requiredSecrets) {
 > 💡 **Tip**: 複数のリモートリポジトリがある場合は、`-R <owner>/<repo>`オプションでリポジトリを明示的に指定してください。
 >
 > **実行例:**
+>
 > ```powershell
 > # 例: aktsmm/CICD-AKS-technical-exerciseリポジトリに設定
 > gh secret set AZURE_SUBSCRIPTION_ID --body '832c4080-181c-476b-9db0-b3ce9596d40a' -R aktsmm/CICD-AKS-technical-exercise
@@ -284,7 +286,7 @@ foreach ($variable in $requiredVariables) {
 }
 ```
 
-> ⚠️ **重要:** `AZURE_GITHUB_PRINCIPAL_ID`は**Variable**として設定してください（Secretではありません）。誤ってSecretに設定した場合は削除してください:
+> ⚠️ **重要:** `AZURE_GITHUB_PRINCIPAL_ID`は**Variable**として設定してください（Secret ではありません）。誤って Secret に設定した場合は削除してください:
 >
 > ```powershell
 > # 誤って設定したSecretを削除
@@ -442,7 +444,7 @@ start https://github.com/YOUR_USERNAME/CICD-AKS-technical-exercise/security
 | `MONGO_ADMIN_PASSWORD`  | MongoDB の管理者パスワード          | `ZGLvtXB3z1b8Q5glsWTdUaPSHEN627My`          |
 | `GITGUARDIAN_API_KEY`   | GitGuardian API キー（オプション）  | `ee2EdfA1cf7b172be8dC699b040E7B4Bcd...`     |
 
-> 💡 **注意:** 以前のバージョンで必要だった`AZURE_CREDENTIALS_ADMIN`は不要になりました。RBACワークフローが削除されたためです。
+> 💡 **注意:** 以前のバージョンで必要だった`AZURE_CREDENTIALS_ADMIN`は不要になりました。RBAC ワークフローが削除されたためです。
 
 ### GitHub Variables 一覧
 
@@ -460,11 +462,11 @@ start https://github.com/YOUR_USERNAME/CICD-AKS-technical-exercise/security
 
 ### よくある問題と解決方法
 
-#### 0. サブスクリプションIDエラー（最も多い問題） 🔴
+#### 0. サブスクリプション ID エラー（最も多い問題） 🔴
 
 **エラー:** `ERROR: The subscription of '***' doesn't exist in cloud 'AzureCloud'.`
 
-**原因:** GitHub Secretsの`AZURE_SUBSCRIPTION_ID`が設定されていない、または誤った値が設定されている
+**原因:** GitHub Secrets の`AZURE_SUBSCRIPTION_ID`が設定されていない、または誤った値が設定されている
 
 **解決方法:**
 
@@ -482,8 +484,9 @@ gh secret list | Select-String "AZURE_SUBSCRIPTION_ID"
 ```
 
 **予防策:**
-- ステップ4-2で必ず`gh secret list`と`gh variable list`を実行して設定を確認する
-- 初回ワークフロー実行前に、すべての必須Secrets/Variablesが設定されているかチェックする
+
+- ステップ 4-2 で必ず`gh secret list`と`gh variable list`を実行して設定を確認する
+- 初回ワークフロー実行前に、すべての必須 Secrets/Variables が設定されているかチェックする
 
 #### 1. Service Principal の認証エラー
 
@@ -804,8 +807,8 @@ GITGUARDIAN_API_KEY       - （オプション）
 ```
 
 > ⚠️ **最重要:** `AZURE_SUBSCRIPTION_ID`が設定されていないと、すべてのワークフローが失敗します！
-> 
-> 💡 **注意:** `AZURE_CREDENTIALS_ADMIN`は不要です（以前のRBACワークフロー用でしたが、そのワークフローは削除されました）
+>
+> 💡 **注意:** `AZURE_CREDENTIALS_ADMIN`は不要です（以前の RBAC ワークフロー用でしたが、そのワークフローは削除されました）
 
 **GitHub Variables（5 個）:**
 
@@ -817,7 +820,7 @@ AZURE_GITHUB_PRINCIPAL_ID  - ba5e5bf1-4e1b-484a-a4cd-d8b9be224de3
 AZURE_GRANT_GITHUB_OWNER   - false
 ```
 
-> 💡 **注意:** `AZURE_GITHUB_PRINCIPAL_ID`は**Variable**です（Secretではありません）
+> 💡 **注意:** `AZURE_GITHUB_PRINCIPAL_ID`は**Variable**です（Secret ではありません）
 
 **設定確認コマンド:**
 

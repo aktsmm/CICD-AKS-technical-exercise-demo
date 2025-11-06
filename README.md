@@ -1,294 +1,348 @@
 # CICD-AKS Technical Exercise
 
-> **注意:** このリポジトリは 意図的な脆弱性を含むため、本番用途では必ず防御策を追加してください。
+## プロジェクト概要
 
-## 🚀 クイックスタート (初回セットアップ)
+- 本リポジトリは、Azure Kubernetes Service (AKS) 上で動作する Node.js アプリケーションと、周辺インフラを Bicep と GitHub Actions で自動化するトレーニング用プロジェクトです。
+- インフラ構築、アプリケーションデプロイ、セキュリティスキャン、監視までを一連のパイプラインで体験し、CI/CD と DevSecOps の実務感覚を習得することを目的としています。
+- 主要な技術スタック
+  - Azure: AKS、Azure Container Registry (ACR)、Virtual Network、Log Analytics、Azure Monitor Workbook、Azure Policy、System Assigned Managed Identity を備えた MongoDB VM、Storage Account など
+  - CI/CD: GitHub Actions (インフラ展開、アプリケーションビルド、コンテナスキャン)
+  - アプリ: Node.js + Express + EJS、MongoDB
+  - IaC・スクリプト: Bicep モジュール、PowerShell / Bash スクリプト
+- 初期準備の詳細は `SetupGuide.md` にまとまっているため、作業前に必ず参照してください。
 
-### 前提条件
-
-- Azure CLI がインストールされ、`az login` 済み
-- GitHub リポジトリへの管理者アクセス権限
-- PowerShell 7+ (Windows/macOS/Linux)
-
-### 1. Service Principal 作成と権限付与
-
-```powershell
-# リポジトリをクローン
-git clone https://github.com/aktsmm/CICD-AKS-technical-exercise.git
-cd CICD-AKS-technical-exercise
-
-# 自動セットアップスクリプトを実行
-.\Scripts\Setup-ServicePrincipal.ps1 -SubscriptionId "YOUR_SUBSCRIPTION_ID"
-```
-
-このスクリプトは以下を自動実行します:
-
-- ✅ Service Principal `sp-wizexercise-github` を作成
-- ✅ 必要な権限を付与:
-  - **Contributor**: リソース管理
-  - **Resource Policy Contributor**: Azure Policy 管理
-  - **User Access Administrator**: RBAC 自動管理(完全自動化に必要)
-- ✅ GitHub Secrets 用 JSON を生成してクリップボードにコピー
-
-### 2. GitHub Secrets 設定
-
-1. リポジトリの **Settings** > **Secrets and variables** > **Actions** を開く
-1. スクリプト出力の値を使って以下の Secrets を作成:
-
-| Secret 名               | 値                                                     |
-| ----------------------- | ------------------------------------------------------ |
-| `AZURE_CREDENTIALS`     | スクリプトが出力した JSON (クリップボードにコピー済み) |
-| `AZURE_SUBSCRIPTION_ID` | Azure サブスクリプション ID                            |
-| `MONGO_ADMIN_PASSWORD`  | MongoDB 管理者パスワード(任意の強力なパスワード)       |
-
-1. **Variables** タブで以下を設定:
-
-| Variable 名            | 値                | 説明                 |
-| ---------------------- | ----------------- | -------------------- |
-| `AZURE_RESOURCE_GROUP` | `rg-bbs-cicd-aks` | リソースグループ名   |
-| `AZURE_LOCATION`       | `japaneast`       | デプロイ先リージョン |
-| `IMAGE_NAME`           | `guestbook`       | コンテナイメージ名   |
-
-### 3. GitHub Actions 実行
-
-1. **Actions** タブを開く
-2. **"1. Deploy Infrastructure"** ワークフローを手動実行 (Run workflow)
-3. 完了後、自動的に **"2-1. Build and Deploy Application"** と **"2-2. Deploy Azure Policy Guardrails"** が実行されます
-
-✅ **完了!** 以降はコミット時に自動デプロイされます。
-
----
-
-## 1. プロジェクト概要
-
-### 目的と背景
-
-- 2 層構成 (AKS 上の Node.js アプリ + Azure VM 上の MongoDB) を題材に、CI/CD、IaC、監視、セキュリティ診断の一連の流れを体験する教材です。
-- あえて脆弱な設定を残しており、セキュリティレビューや改善策検討の練習に利用できます。
-
-### 使用技術スタック
-
-- **インフラ:** Azure Kubernetes Service (AKS)、Azure Virtual Network、Azure Virtual Machine、Azure Container Registry、Log Analytics Workspace。
-- **アプリ:** Node.js + Express + EJS、MongoDB (Mongoose ODM)。
-- **IaC:** Azure Bicep (`infra/` 配下でモジュール分割)。
-- **CI/CD:** GitHub Actions (`.github/workflows/`)、Checkov と Trivy のセキュリティスキャン。
-- **監視:** Azure Monitor / Log Analytics Workbook (セキュリティ ダッシュボード)。
-
-## 2. ネットワーク構成
-
-### 全体図 (論理構成)
+## ネットワーク構成
 
 ```text
-インターネット
-  │ (TLS/HTTPS)
-  ▼
-Azure Public Load Balancer (AKS Ingress)
-  │
-  ▼
-AKS クラスター (ノードプール: 10.0.1.0/24)
-  │
-  ▼
-Kubernetes Pod (guestbook-app)
-  │ (MongoDB 認証付き URI)
-  ▼
-MongoDB VM (10.0.2.0/24) ──► Azure Storage (バックアップ用 BLOB)
++------------------------------------------------ Azure Subscription ------------------------------------------------+
+| Resource Group: rg-bbs-cicd-aks                                                                                     |
+|                                                                                                                    |
+|  +---------------------------+      10.0.1.0/24       +-------------------------+                                  |
+|  | AKS Cluster (aks-dev)     |------------------------| Subnet snet-aks          |                                  |
+|  |  - NGINX Ingress (public) |                        +-------------------------+                                  |
+|  |  - guestbook Pods (x2)    |                         | Service: guestbook      |                                  |
+|  |  - Kubernetes Secrets     |                         | Port 80 -> Pod 3000     |                                  |
+|  +---------------------------+                         v                                                             |
+|                                                                                                                    |
+|  +---------------------------+      10.0.2.0/24       +-------------------------+                                  |
+|  | MongoDB VM (MI enabled)   |<----- NSG allow 22 ----| Subnet snet-mongo        |                                  |
+|  |  - Public IP (training)   |<----- NSG allow 27017 -|                          |                                  |
+|  |  - Backup cron scripts    |                        +-------------------------+                                  |
+|  +---------------------------+                         | Managed Identity auth   |                                  |
+|                                                        v                                                             |
+|                                                +----------------------+                                             |
+|                                                | Storage Account      |                                             |
+|                                                |  - Blob (backups)    |                                             |
+|                                                +----------------------+                                             |
+|                                                                                                                    |
+|  +---------------------------+                                                                           +--------+ |
+|  | Log Analytics Workspace   |<-- Diagnostic Settings (AKS/ACR/VM/NSG) --> Azure Monitor Workbook        | Policy | |
+|  +---------------------------+                                                                           +--------+ |
++--------------------------------------------------------------------------------------------------------------------+
 ```
 
-### コンポーネント接続関係
+- AKS は Azure CNI (VNet 統合) を利用し、`snet-aks` に直接 Pod IP を割り当てます。MongoDB VM は別サブネットに隔離し、NSG でアクセス制御を行います。
+- バックアップ用 Storage Account は一部脆弱な設定 (HTTP 許可など) を残しており、セキュリティスキャン教材として活用します。
+- サブスクリプションレベルで Azure Policy を割り当て、Log Analytics へ診断ログを集約することで監査性を高めています。
 
-- VNet `10.0.0.0/16` を 2 サブネット (`snet-aks`, `snet-mongo`) に分割し、それぞれ AKS と MongoDB VM を収容します。
-- AKS クラスターはパブリック API サーバーを維持したまま Ingress-Nginx を利用して外部公開します。
-- MongoDB VM は同一 VNet 内のプライベート IP で Pod と通信しつつ、SSH 用のパブリック IP を持ちます (デモ用の脆弱設定)。
-- Azure Storage は MongoDB のバックアップ先として使用され、Custom Script でジョブが設定されます。
-
-### 外部アクセスと制限
-
-- Web アプリは Ingress 経由で HTTPS 提供 (cert-manager による自己署名 ClusterIssuer)。
-- MongoDB ポート (27017/TCP) は AKS サブネットからのアクセスのみ許可、SSH (22/TCP) は全世界へ開放されています。
-- GitHub Actions と Azure の連携は OIDC + サービス プリンシパルで行い、Bicep 内で RBAC を最小化できる構造です。
-
-## 3. セキュリティ設計
+## セキュリティ設計
 
 ### 認証・認可
 
-- Azure 側では GitHub Actions 用サービス プリンシパルと、AKS kubelet / Mongo VM の Managed Identity を利用します。
-- Kubernetes 側では `rbac-vulnerable.yaml` が `cluster-admin` を付与しており、意図的な過剰権限が存在します。
-- MongoDB は Custom Script で `mongoadmin` を作成し、Secret に接続 URI を保存します。
+- GitHub Actions から Azure への認証は Service Principal を使用し、`Scripts/Setup-ServicePrincipal.ps1` で `Contributor`・`Resource Policy Contributor`・`User Access Administrator` を一括付与します。
+- AKS では RBAC を有効化していますが、教材として `app/k8s/rbac-vulnerable.yaml` で広い権限の ServiceAccount を定義しています。実運用では Namespace 分離とロール最小化が必要です。
+- MongoDB VM は System Assigned Managed Identity を有効化し、`modules/vm-storage-role.bicep` がバックアップ先 Storage に対するロールを自動割り当てします。
 
-### 通信暗号化
+### 通信の暗号化
 
-- Ingress と cert-manager で TLS 証明書を払い出し、ブラウザ～ Ingress 間を HTTPS 化します。
-- Pod ～ MongoDB 間はプレーン TCP ですが、認証付き URI を使い最低限の保護を確保しています。実運用では TLS トンネルや Private Link の利用が推奨です。
+- Ingress Controller は自己署名証明書を利用した HTTPS 終端を前提としており、TLS は Public Load Balancer で終端します。
+- 仮想ネットワーク内通信は平文ですが、Private Link や Azure Firewall の追加でゼロトラスト化を強化できます。
+- MongoDB 接続は Kubernetes Secret 経由で行います。現状 TLS 無効のため、本番では `mongod.conf` の TLS 設定とクライアント証明書導入を推奨します。
 
-### Secrets / 環境変数管理
+### Secrets・環境変数の管理
 
-- GitHub Actions では `AZURE_CREDENTIALS`、`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、`MONGO_ADMIN_PASSWORD` を Secrets に保持します。
-- Kubernetes Secret `mongo-credentials` に MongoDB 接続 URI を保存し、Deployment の `env` から参照します。
-- Bicep パラメーターには `@secure()` を付与し、`azure/arm-deploy` アクションに安全に渡します。
+- `AZURE_CREDENTIALS` や `MONGO_ADMIN_PASSWORD` などの資格情報は GitHub Secrets として保管し、`SetupGuide.md` に CLI で一括登録する PowerShell コマンド例を掲載しています。
+- AKS の Deployment は `mongo-credentials` Secret から接続文字列を参照し、`env.valueFrom.secretKeyRef` で Pod に注入します。
+- VM バックアップスクリプトは Managed Identity と RBAC に依存しており、Storage Account キーを使用しないシークレットレス運用を実現します。
 
-### 意図的に残している脆弱性
+### 認証方式の比較と選定理由
 
-- MongoDB VM への SSH を全世界に開放 (`Allow-SSH-Internet`)。
-- AKS API サーバーがパブリック公開で、ClusterRoleBinding により `cluster-admin` を付与。
-- Storage アカウントのパブリック BLOB アクセスを許可。
-- Defender for Cloud は有効化済みで検知は可能ですが、緩和策は各自で実施する想定です。
+| 経路          | 採用方式                                                   | 理由                                                   | 改善アイデア                                                  |
+| ------------- | ---------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------- |
+| CI/CD → Azure | Service Principal (クライアントシークレット)               | `azure/login` アクションとの互換性が高く既存手順が豊富 | GitHub OIDC (Federated Credential) へ移行しシークレットレス化 |
+| AKS → ACR     | kubelet の Managed Identity + `modules/aks-acr-role.bicep` | Pull シークレット不要で運用負荷を軽減                  | Azure AD Workload Identity で Pod 単位の権限分離              |
+| VM → Storage  | System Assigned Managed Identity                           | ローテーション不要でバックアップ自動化に適合           | Key Vault + Private Endpoint で経路と鍵管理を強化             |
 
-### 実運用向け Tips
+### セキュリティ観点
 
-- SSH 制限には Azure Bastion や NSG の IP フィルタリングを導入し、Bicep の `allowSSHFromInternet` を `false` に変更します。
-- AKS を非公開化する場合は `enablePrivateCluster` を `true` にして、Azure Firewall や Private Endpoint と組み合わせます。
-- Storage は `allowPublicBlobAccess` を `false` に変更し、Private Endpoint への切り替えを検討してください。
+- 脅威モデル: SSH 全開放や HTTP 許可 Storage など意図的なリスクを残し、Checkov や Trivy での検出体験を提供します。
+- ゼロトラスト: 現状はフラットなネットワークのため、Jump Host や Just-In-Time Access を組み合わせる拡張案を `今後の改善点` に整理しています。
+- 監査ログ: Subscription Activity Log を Log Analytics に転送し、`modules/workbook-security.bicep` で可視化ダッシュボードを自動生成します。GitHub Actions では SARIF をアップロードして監査証跡を保持します。
 
-## 4. システムアーキテクチャ
+## システムアーキテクチャ
 
-### サービス構成
-
-- **Guestbook アプリ (AKS 上 Pod):** `app/app.js` の Express アプリが一覧表示と投稿処理を担当。`/health` で Liveness/Readiness Probe に応答します。
-- **MongoDB (Azure VM):** `infra/modules/vm-mongodb.bicep` と `infra/scripts/*.sh` がインストールと認証設定、バックアップを自動化します。
-- **Azure Container Registry:** `02-1.app-deploy.yml` の `build-push` ジョブが `acrname.azurecr.io/guestbook:<tag>` 形式でイメージを管理します。
-- **監視 (Log Analytics + Workbook):** `infra/modules/workbook-security.bicep` が Defender アラートやアクティビティログを可視化するダッシュボードを展開します。
-
-### データフローと依存関係
-
-1. ユーザーがフォームから投稿すると Express が MongoDB にドキュメントを保存します。
-2. バックエンドは Secret から `MONGO_URI` を読み込み、Mongoose で `messages` コレクションを操作します。
-3. MongoDB は Azure Storage に定期バックアップをアップロードします。
-4. Azure Monitor が各リソースの診断ログを収集し、Workbook で可視化します。
-
-## 5. 処理のフロー (ユーザー操作基点)
-
-1. ブラウザが HTTPS で Ingress にアクセスします。
-2. Ingress が Service `guestbook-service` (ClusterIP) にルーティングし、Pod がリクエストを処理します。
-3. `POST /post` で送信されたデータを MongoDB に保存し、`/` へリダイレクトします。
-4. `GET /` で最新メッセージを取得し、EJS テンプレートで描画します。
-5. `/health` エンドポイントが 200 を返し、Kubernetes が Pod の正常性を監視します。
-6. MongoDB バックアップスクリプトが Azure Storage にデータを同期します。
-
-## 6. 通信のフロー
-
-| ソース                | 宛先                  | プロトコル | ポート | 用途                      |
-| --------------------- | --------------------- | ---------- | ------ | ------------------------- |
-| ユーザー端末          | Ingress Load Balancer | HTTPS      | 443    | Web UI へのアクセス       |
-| Ingress Controller    | guestbook-service     | HTTP       | 80     | Pod へのルーティング      |
-| guestbook Pod         | MongoDB VM            | TCP        | 27017  | データの読み書き          |
-| GitHub Actions Runner | Azure APIs            | HTTPS      | 443    | Bicep デプロイや AKS 操作 |
-| MongoDB VM            | Azure Storage         | HTTPS      | 443    | バックアップ転送          |
-| 管理者端末            | MongoDB VM            | SSH        | 22     | 管理用途 (意図的脆弱性)   |
-
-## 7. デプロイ手順
-
-### 7.1 必要な前提条件
-
-1. Azure サブスクリプション (Contributor 以上)。
-2. GitHub リポジトリと必要に応じて GitHub CLI。
-3. ローカルに Azure CLI、kubectl、Docker、Node.js 20.x をインストール済み。
-
-### 7.2 Azure 側の初期設定
-
-```powershell
-# サービス プリンシパルを作成し、GitHub Actions から Azure に接続できるようにする
-az ad sp create-for-rbac `
-  --name sp-wizexercise-github `
-  --role Contributor `
-  --scopes /subscriptions/<SUBSCRIPTION_ID> `
-  --sdk-auth
-
-# リソース グループを作成 (infra/main.bicep の既定値と合わせる)
-az group create `
-  --name rg-bbs-cicd-aks `
-  --location japaneast
+```text
+User Browser
+  |
+  | HTTPS / HTTP
+  v
+NGINX Ingress Load Balancer
+  |
+  | L7 routing (path /)
+  v
+guestbook-service (ClusterIP 80)
+  |
+  | Forwards to 3000/TCP
+  v
+guestbook-app Pods (ReplicaSet x2)
+  |
+  | CRUD via MONGO_URI Secret
+  v
+MongoDB VM (System Assigned MI)
+  |
+  | Backup cron → AzCopy
+  v
+Storage Account (Blob container)
 ```
 
-### 7.3 GitHub Secrets / Repository Variables 登録
+- `app/app.js` は Express によるビュー描画と API を提供し、`/health` でヘルスチェック応答を返します。
+- MongoDB VM は `infra/scripts/install-mongodb.sh` と `setup-mongodb-auth.sh` により自動構成され、`setup-backup.sh` が Blob Storage へのバックアップを cron に登録します。
+- 監視メトリクスは Log Analytics に送信され、ワークブックで状態を可視化できます。
 
-- `Settings > Secrets and variables > Actions` で以下を設定します。
-  - Secrets: `AZURE_CREDENTIALS`、`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、`MONGO_ADMIN_PASSWORD`。
-  - Variables: `AZURE_RESOURCE_GROUP`、`AZURE_LOCATION`、`IMAGE_NAME` (例: `guestbook`)、`AZURE_GITHUB_PRINCIPAL_ID` (任意で RBAC 自動付与を制御)。
+## 処理のフロー
 
-### 7.4 GitHub Actions ワークフローの流れ
-
-1. `01.infra-deploy.yml`
-   - Checkov/Trivy で Bicep をスキャン (soft_fail=true)。
-   - `az deployment sub what-if` で差分を確認し、`azure/arm-deploy` で `main.bicep` を展開します。
-   - 成果物サマリに AKS 名称や Workbook URL を出力します。
-2. `02-1.app-deploy.yml`
-   - Lint/Jest、CodeQL、Trivy を実行して品質と脆弱性を確認します。
-   - ACR にイメージをプッシュし、`az aks command invoke` でマニフェストや Secret を適用します。
-   - cert-manager を導入し、自己署名証明書で HTTPS を有効化します。
-
-### 7.5 手動で必要な作業
-
-- Ingress の Public IP に合わせて DNS レコード (A レコード) を設定する場合があります。
-- Azure AD と統合した認証が必要なときは、App Gateway + Entra ID などで保護レイヤーを追加してください。
-- Security Workbook の URL は GitHub Actions のアーティファクトに出力されるため、組織ポリシーに沿って閲覧権限を調整してください。
-
-## 8. 初期セットアップ (ローカル動作確認)
-
-### 8.1 リポジトリ取得
-
-```powershell
-# リポジトリ URL を変数化してクローンし、アプリケーション ディレクトリへ移動する
-$repoUrl = "https://github.com/aktsmm/CICD-AKS-technical-exercise.git"
-git clone $repoUrl
-cd CICD-AKS-technical-exercise/app
+```text
+1. User Request (Browser)
+   |
+   v
+2. NGINX Ingress Controller
+   |
+   v
+3. guestbook-service (ClusterIP)
+   |
+   v
+4. guestbook-app Pod
+   |-- Emits logs/metrics to Log Analytics
+   |
+   v
+5. MongoDB VM (Data persistence)
+   |
+   v
+6. Backup Script (cron) → Storage Account (Blob)
 ```
 
-### 8.2 MongoDB ローカル起動 (簡易確認)
+- ユーザー操作は AKS 内 Pod で処理され、MongoDB に永続化されます。
+- バックアップは VM 上の cron が非同期実行し、障害時復旧を前提とした設計です。
+- ログとメトリクスは Azure Monitor エージェントが収集し、可観測性を確保します。
 
-#### Docker を利用する場合
+## 通信のフロー
 
-```powershell
-# デモ用にローカル MongoDB を起動し、Guestbook 用データベースを準備する
-docker run `
-  --name mongo-local `
-  -p 27017:27017 `
-  -e MONGO_INITDB_ROOT_USERNAME=mongoadmin `
-  -e MONGO_INITDB_ROOT_PASSWORD=P@ssw0rd! `
-  -d mongo:6
+```text
+Internet User
+  |
+  | TCP 80 / 443
+  v
+NGINX Ingress LB
+  |
+  | TCP 80 (internal)
+  v
+guestbook-service (ClusterIP)
+  |
+  | TCP 3000
+  v
+guestbook-app Pod
+  |
+  | TCP 27017 (only from snet-aks)
+  v
+MongoDB VM
+  |
+  | HTTPS 443 (AzCopy to Blob)
+  v
+Storage Account (Blob)
 ```
 
-#### 既存の MongoDB を利用する場合
+| 経路                | プロトコル / ポート  | 備考                                         |
+| ------------------- | -------------------- | -------------------------------------------- |
+| 利用者 → Ingress    | HTTP/HTTPS : 80, 443 | nip.io ドメインで証明書を自動割り当て        |
+| Ingress → Service   | HTTP : 80            | Ingress アノテーションで `/` へルーティング  |
+| Service → Pod       | HTTP : 3000          | Liveness / Readiness Probe も同ポート        |
+| Pod → MongoDB VM    | TCP : 27017          | NSG で `10.0.1.0/24` のみ許可                |
+| 管理者 → MongoDB VM | SSH : 22             | デモ用に 0.0.0.0/0 を許容 (本番では閉鎖推奨) |
+| VM → Storage        | HTTPS : 443          | Managed Identity + AzCopy によるバックアップ |
 
-- 環境変数 `MONGO_URI` を適切な接続文字列で上書きし、`app/app.js` の既定値を無効化します。
+## CI/CD 構成とデプロイ手順
 
-### 8.3 Node.js 依存関係のインストールとテスト
-
-```powershell
-# 依存関係をインストールし、ユニットテスト後にローカルサーバーを起動する
-npm ci
-npm test
-npm start
+```text
+Push / Pull Request / workflow_dispatch
+  |
+  +--> 1. Deploy Infrastructure (.github/workflows/01.infra-deploy.yml)
+  |      |
+  |      +--> Checkov が Bicep をスキャンし SARIF で結果を保存 (IaC 品質)
+  |      +--> azure/arm-deploy が `infra/main.bicep` を展開し、AKS や MongoDB VM を構築
+  |      +--> 生成した AKS 名や MongoDB IP をアーティファクト化して後続ジョブへ連携
+  |
+  +--> 2-1. Build and Deploy Application (.github/workflows/02-1.app-deploy.yml)
+  |         |
+  |         +--> quality-check: `npm test` で lint とユニットテストを実行
+  |         +--> codeql-analysis: JavaScript 向け CodeQL で静的解析 (continue-on-error=true で学習用途に最適化)
+  |         +--> scan-container: Trivy がコンテナイメージをスキャンし SARIF を Security タブへ送信
+  |         +--> build-push: ACR へ `sha` と `latest` タグを push、AKS と MongoDB の情報を取得
+  |         +--> deploy-aks: `az aks command invoke` でマニフェストとシークレットを適用し、cert-manager まで自動設定
+  |
+  +--> 2-2. Deploy Azure Policy Guardrails (.github/workflows/02-2.policy-guardrails.yml)
+  |         |
+  |         +--> Checkov でポリシー定義を再スキャンし、`Build-CustomMcsb.ps1` で Microsoft Cloud Security Benchmark のカスタムセットを生成
+  |         +--> 必要な RBAC を検証しながら `policy-guardrails.bicep` をデプロイ (RBAC 未設定なら自動付与を試行)
+  |
+  +--> 2-3. Secret Scan with GitGuardian (.github/workflows/02-3.GitGuardian_secret-scan.yml)
+            |
+            +--> `ggshield secret scan` がコミット履歴と差分を解析し、API キーやパスワード漏洩を検出
+            +--> `.github/scripts/ggshield_to_sarif.py` で JSON 結果を SARIF へ変換し、Code Scanning Alerts と Step Summary で可視化
+            +--> スキャン失敗時もワークフロー全体は止めず、Security タブで詳細を追えるよう警告を発行
 ```
 
-### 8.4 kubectl / AKS への接続 (検証用)
+- 事前準備
+  - Azure サブスクリプションとリソースグループ (`rg-bbs-cicd-aks`)
+  - GitHub Secrets: `AZURE_CREDENTIALS`, `AZURE_SUBSCRIPTION_ID`, `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `MONGO_ADMIN_PASSWORD`, `GITGUARDIAN_API_KEY` (任意)
+  - GitHub Variables: `AZURE_RESOURCE_GROUP`, `AZURE_LOCATION`, `IMAGE_NAME`, `AZURE_GITHUB_PRINCIPAL_ID`, `AZURE_GRANT_GITHUB_OWNER`
+  - 詳細な登録手順と補足は `SetupGuide.md` を参照
+- 手動準備が必要な主な項目
+  - Service Principal の発行とロール割り当て (`Scripts/Setup-ServicePrincipal.ps1` を推奨)
+  - nip.io 以外のドメインで公開する場合の DNS レコード追加
+  - Secrets / Variables の投入 (CLI 例は SetupGuide の「Secrets 設定」章に記載)
+- 品質ゲートとセキュリティ
+  - IaC: Checkov が Bicep のベストプラクティス違反や脆弱設定 (パブリックストレージ許可など) を検知
+  - アプリ: Lint + Jest による回帰検知、CodeQL による静的解析、Trivy による CVE スキャンで攻撃面を最小化
+  - シークレット: GitGuardian が過去コミットと最新差分を対象にクラウドキーを検出し、Security タブで継続監視
+- 実行例
 
 ```powershell
-# AKS の認証情報を取得し、主要なリソースを確認する
+# インフラ用ワークフローを手動実行
+# (gh CLI の認証が済んでいることが前提)
+gh workflow run infra-deploy.yml
+
+# 最新実行を監視し、異常終了時は非ゼロコードで停止
+gh run watch --exit-status
+
+# AKS の資格情報をローカルに取得して状態確認
 az aks get-credentials `
   --resource-group rg-bbs-cicd-aks `
-  --name aks-dev
-
-kubectl get pods -n ingress-nginx
-kubectl get svc guestbook-service
-kubectl get ingress guestbook-ingress
+  --name aks-dev `
+  --overwrite-existing
+kubectl get pods -A
 ```
 
-### 8.5 よくあるトラブルと対処
+- ワークフローの工夫点
+  - スキャンジョブは `continue-on-error: true` や `soft_fail: true` により学習目的で停止させず、結果を SARIF として保存します。
+  - インフラワークフローの出力 (AKS 名や MongoDB IP) をアーティファクト化し、アプリワークフローが `actions/download-artifact` で再利用します。
+  - Docker イメージにはコミット SHA と `latest` の二重タグを付与し、ロールバック容易性を確保しています。
 
-- **AKS API が未準備:** `app-deploy` ワークフローは最大 10 分待機します。失敗した場合はワークフローを再実行してください。
-- **MongoDB 接続失敗:** `kubectl logs deployment/guestbook-app` でアプリログを確認し、`mongo-secret.yaml` の URI が想定通りかチェックします。
-- **cert-manager Pod が Ready にならない:** 数分待機しても改善しない場合は `kubectl describe pod -n cert-manager` で詳細を確認します。
+## 初期セットアップ
 
-## 9. 参考資料 (公式ドキュメント)
+- **Step 1: リポジトリを取得**
 
-- #microsoft.docs.mcp [Azure Kubernetes Service の概要](https://learn.microsoft.com/ja-jp/azure/aks/intro-kubernetes) — AKS の公開エンドポイントや制御プレーンの説明が記載されています。
-- #microsoft.docs.mcp [Azure Container Registry とは](https://learn.microsoft.com/ja-jp/azure/container-registry/container-registry-intro) — ACR 連携手順とセキュリティ構成が示されています。
-- #microsoft.docs.mcp [Bicep 入門](https://learn.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/overview) — `infra/main.bicep` のような宣言的 IaC の基本を確認できます。
-- #microsoft.docs.mcp [Custom Script Extension (Linux)](https://learn.microsoft.com/ja-jp/azure/virtual-machines/extensions/custom-script-linux) — MongoDB セットアップに使う拡張の仕組みが解説されています。
-- #microsoft.docs.mcp [GitHub Actions から Azure へデプロイ](https://learn.microsoft.com/ja-jp/azure/developer/github/connect-from-azure?tabs=azure-cli) — サービス プリンシパルと OIDC の連携手順を参照できます。
+  ```powershell
+  # プロジェクトをクローン
+  git clone https://github.com/<YOUR_ACCOUNT>/CICD-AKS-technical-exercise.git
+  # 作業ディレクトリへ移動
+  Set-Location CICD-AKS-technical-exercise
+  ```
 
-## 10. 次のステップ (任意)
+- **Step 2: Azure CLI でログイン**
 
-- 脆弱な構成を 1 つずつ修正し、Checkov/Trivy の結果変化を比較して学習を深める。
-- Azure Policy を追加し、`policy-guardrails.bicep` をベースにガバナンス強化を行う。
-- GitHub Actions に手動承認ステップや環境保護ルールを追加し、実運用に近いパイプライン設計を検証する。
+  ```powershell
+  # Azure へログイン
+  az login
+  # 対象サブスクリプションを選択
+  az account set --subscription "<YOUR_SUBSCRIPTION_ID>"
+  ```
+
+- **Step 3: Service Principal と Secrets/Variables を登録**
+
+  ```powershell
+  # Service Principal を作成しロールを自動付与
+  .\Scripts\Setup-ServicePrincipal.ps1 -SubscriptionId "<YOUR_SUBSCRIPTION_ID>"
+  # 出力された JSON (AZURE_CREDENTIALS) を GitHub Secrets に登録
+  ```
+
+- **Step 4: MongoDB 管理者パスワードを生成**
+
+  ```powershell
+  # SetupGuide に掲載のスクリプト例を使用し 32 文字のランダムパスワードを生成
+  $mongoPassword = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+  Set-Clipboard $mongoPassword
+  ```
+
+- **Step 5: GitHub Actions を実行**
+
+  ```powershell
+  # インフラをデプロイ (Workflow Dispatch)
+  gh workflow run infra-deploy.yml
+  # 完了後にアプリをデプロイ
+  gh workflow run azure-pipelines-app.yml
+  ```
+
+必要ツール (推奨バージョンは SetupGuide に記載): Azure CLI 最新版、GitHub CLI (`gh`)、Git、PowerShell 7 以上または Bash、kubectl、Docker。
+
+## ディレクトリ構成とファイル説明
+
+```text
+CICD-AKS-technical-exercise/
+├─ app/                      # Node.js アプリと Kubernetes マニフェスト
+│  ├─ app.js                 # Express アプリ本体 (Mongo 連携)
+│  ├─ Dockerfile             # コンテナビルド定義
+│  ├─ k8s/                   # AKS に適用する YAML 群 (deployment, service, ingress, RBAC)
+│  └─ __tests__/             # Jest によるヘルスチェックテスト
+├─ infra/                    # Bicep モジュール、パラメータ、VM スクリプト
+│  ├─ main.bicep             # サブスクリプションスコープのエントリーポイント
+│  ├─ modules/               # VNet / AKS / ACR / VM などのモジュラー定義
+│  ├─ parameters/            # dev 用パラメータ例
+│  └─ scripts/               # MongoDB セットアップ・バックアップ脚本
+├─ pipelines/                # GitHub Actions ワークフロー (インフラ・アプリ)
+├─ Scripts/                  # PowerShell セットアップ支援ツール
+├─ docs/                     # 設計メモ・セキュリティ / 運用ノウハウ
+└─ Docs_issue_point/         # 調査ログ・課題管理メモ
+```
+
+初心者は `SetupGuide.md` → `infra/main.bicep` → `app/k8s/` の順に読み進めると構成を理解しやすく、詳細な背景やトラブルシューティングは `docs/` に整理されています。
+
+## 主要ファイルの技術的説明
+
+### Bicep モジュール
+
+| ファイル                          | 役割                                                                         | 補足                                                                 |
+| --------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `infra/main.bicep`                | リソースグループ、ネットワーク、AKS、ACR、VM、Monitor、Policy を統括デプロイ | Defender for Cloud プランやアクティビティログ収集も同時構成          |
+| `infra/modules/networking.bicep`  | 10.0.0.0/16 VNet と AKS / Mongo 用サブネットを定義                           | AKS サブネットでは Private Endpoint ポリシーを無効化して柔軟性を確保 |
+| `infra/modules/aks.bicep`         | System Assigned Managed Identity を持つ AKS をデプロイ                       | Public API、Azure CNI、Log Analytics アドオンを有効化                |
+| `infra/modules/acr.bicep`         | Standard SKU の ACR を作成                                                   | Admin ユーザー無効化、Managed Identity で Pull する前提              |
+| `infra/modules/vm-mongodb.bicep`  | Public IP 付き Ubuntu VM と NSG を作成し MongoDB をセットアップ              | SSH 全開放や古い OS など脆弱設定を意図的に残して学習教材化           |
+| `infra/modules/diagnostics.bicep` | AKS / ACR / VM / NSG の診断ログを Log Analytics へ転送                       | 監査・アラート分析のベースラインを形成                               |
+
+### GitHub Actions ワークフロー
+
+- `pipelines/azure-pipelines-infra.yml`: Checkov による IaC スキャン後に `azure/arm-deploy@v1` で Bicep をデプロイし、出力をアーティファクト化します。
+- `pipelines/azure-pipelines-app.yml`: Trivy でコンテナスキャン、Docker ビルド/プッシュ、`kubectl apply` による AKS デプロイを実施し、イメージタグをジョブ間で受け渡します。
+
+### スクリプト
+
+- `Scripts/Setup-ServicePrincipal.ps1`: Service Principal の作成・ロール割り当て・Secrets 用 JSON 出力を自動化します。
+- `infra/scripts/install-mongodb.sh`: MongoDB のリポジトリ追加とパッケージ導入を行います。
+- `infra/scripts/setup-mongodb-auth.sh`: 管理ユーザー作成と認証設定を自動化し、`MONGO_ADMIN_PASSWORD` を注入します。
+- `infra/scripts/setup-backup.sh`: Managed Identity を利用した Blob Storage へのバックアップ cron ジョブを登録します。
+- `Scripts/deploy-ingress-controller.ps1`: ローカル検証時に NGINX Ingress Controller を展開する補助スクリプトです (GitHub Actions 実行時は不要)。
+
+## 今後の改善点 - DevOps / DevSecOps
+
+- GitHub OIDC を導入して Service Principal シークレットを廃止し、シークレット管理負荷を削減する。
+- Ingress Controller を Internal Load Balancer 化し、Application Gateway や Azure Front Door と組み合わせて多層防御を構築する。
+- セキュリティスキャンを段階的に fail-fast 化し、許容ポリシーや Allowlist を整備したうえで CRITICAL / HIGH 検出時にデプロイを停止させる。
+- Azure Policy を強化し、SSH 公開や HTTP 許可などの脆弱設定をステージング → 本番の順に段階的に禁止する。
+- AKS Workload Identity と Namespaced RBAC を導入し、Pod 単位で最小権限を徹底する。
+- GitGuardian SARIF が Security タブへ反映されるよう調査を継続し、必要に応じて GitHub Support や Advanced Security 設定の見直しを行う。
+
+## 参考資料
+
+- [GitHub Actions から Azure リソースをデプロイする方法](https://learn.microsoft.com/ja-jp/azure/developer/github/github-actions-workflow) (#microsoft.docs.mcp)
+- [AKS ネットワークとセキュリティのベストプラクティス](https://learn.microsoft.com/ja-jp/azure/aks/operator-best-practices-network) (#microsoft.docs.mcp)
+- [Azure Monitor と Log Analytics を活用したログ分析チュートリアル](https://learn.microsoft.com/ja-jp/azure/azure-monitor/logs/log-analytics-tutorial) (#microsoft.docs.mcp)
