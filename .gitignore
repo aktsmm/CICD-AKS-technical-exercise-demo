@@ -24,3 +24,7 @@ mongo_password.txt
 Docs_Secrets/
 Docs_issue_point/
 Docs_work_history/
+
+# プロジェクト内部ドキュメント (外部公開不要)
+docs/
+Docs_issue_point/
