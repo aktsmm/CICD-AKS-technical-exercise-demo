@@ -77,6 +77,37 @@ jobs:
                       location=$(az group show --name "${AZURE_RESOURCE_GROUP}" --query location -o tsv 2>/dev/null || true)
                   fi
 
+                  # 既存のポリシー割り当ての location を参照し、リージョンを固定する
+                  env_file="infra/parameters/policy-dev.parameters.json"
+                  deploy_env=""
+                  if [ -f "$env_file" ]; then
+                      deploy_env=$(jq -r '.parameters.environment.value // empty' "$env_file" 2>/dev/null)
+                  fi
+                  if [ -z "$deploy_env" ]; then
+                      deploy_env="dev"
+                  fi
+
+                  assignments=(
+                    "asgmt-cis140-${deploy_env}"
+                    "asgmt-mcsb-${deploy_env}"
+                    "asgmt-storage-public-${deploy_env}"
+                  )
+
+                  for assignment in "${assignments[@]}"; do
+                      existing_location=$(az policy assignment show \
+                        --name "$assignment" \
+                        --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}" \
+                        --query location -o tsv 2>/dev/null || true)
+
+                      if [ -n "$existing_location" ]; then
+                          if [ -n "$location" ] && [ "$location" != "$existing_location" ]; then
+                              echo "⚠️ 既存のポリシー割り当て $assignment が $existing_location に存在するため、AZURE_LOCATION を上書きします。"
+                          fi
+                          location="$existing_location"
+                          break
+                      fi
+                  done
+
                   if [ -z "$location" ]; then
                       echo "::error::デプロイ先リージョンを特定できませんでした。GitHub Variables で AZURE_LOCATION を設定するか、リソースグループの場所を指定してください。"
                       exit 1
@@ -236,5 +267,5 @@ jobs:
                   parameters: >
                       managedIdentityLocation=${{ env.LOCATION }}
                       @infra/parameters/policy-dev.parameters.json
-                  deploymentName: policy-guardrails-${{ env.LOCATION }}-${{ github.run_number }}
+                  deploymentName: policy-guardrails-${{ github.run_number }}-${{ env.LOCATION }}
                   failOnStdErr: false
