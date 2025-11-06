@@ -330,7 +330,7 @@ jobs:
             echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Running What-If analysis..."
             
             if az deployment sub what-if \
-              --name infra-whatif-${{ github.run_number }} \
+              --name infra-whatif-${{ github.run_number }}-${{ env.LOCATION }} \
               --location ${{ env.LOCATION }} \
               --template-file ./infra/main.bicep \
               --parameters \
@@ -380,13 +380,13 @@ jobs:
             grantAutomationPrincipalOwner=${{ env.GRANT_OWNER_PARAMETER }}
             existingStorageRoleAssignmentName=${{ env.EXISTING_STORAGE_ROLE_ASSIGNMENT }}
             existingVmContributorRoleAssignmentName=${{ env.EXISTING_VM_ROLE_ASSIGNMENT }}
-          deploymentName: infra-deployment-${{ github.run_number }}
+          deploymentName: infra-deployment-${{ env.LOCATION }}-${{ github.run_number }}
           failOnStdErr: false
 
       - name: Get Deployment Outputs
         id: outputs
         run: |
-          DEPLOYMENT_NAME="infra-deployment-${{ github.run_number }}"
+          DEPLOYMENT_NAME="infra-deployment-${{ env.LOCATION }}-${{ github.run_number }}"
 
           AKS_NAME=$(az deployment sub show \
             --name $DEPLOYMENT_NAME \
