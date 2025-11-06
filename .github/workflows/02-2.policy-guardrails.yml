@@ -19,7 +19,8 @@ permissions:
 
 env:
     AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-    LOCATION: ${{ vars.AZURE_LOCATION }}
+    AZURE_LOCATION_VAR: ${{ vars.AZURE_LOCATION }}
+    AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
 
 jobs:
     scan-iac:
@@ -64,6 +65,24 @@ jobs:
               uses: azure/login@v1
               with:
                   creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+            - name: Resolve Deployment Location
+              shell: bash
+              run: |
+                  location="${AZURE_LOCATION_VAR}"
+
+                  if [ -z "$location" ] && [ -n "${AZURE_RESOURCE_GROUP}" ]; then
+                      echo "🔍 Repository variable AZURE_LOCATION が未設定のため、リソースグループ ${AZURE_RESOURCE_GROUP} のリージョンを取得します。"
+                      location=$(az group show --name "${AZURE_RESOURCE_GROUP}" --query location -o tsv 2>/dev/null || true)
+                  fi
+
+                  if [ -z "$location" ]; then
+                      echo "::error::デプロイ先リージョンを特定できませんでした。GitHub Variables で AZURE_LOCATION を設定するか、リソースグループの場所を指定してください。"
+                      exit 1
+                  fi
+
+                  echo "✅ Azure Policy を展開するリージョン: $location"
+                  echo "LOCATION=$location" >> "$GITHUB_ENV"
 
             - name: Verify Required RBAC Permissions
               id: check_permissions
