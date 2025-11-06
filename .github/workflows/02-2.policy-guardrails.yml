@@ -21,6 +21,7 @@ env:
     AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     AZURE_LOCATION_VAR: ${{ vars.AZURE_LOCATION }}
     AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+    LOCATION: ${{ vars.AZURE_LOCATION }}
 
 jobs:
     scan-iac:
@@ -233,6 +234,7 @@ jobs:
                   region: ${{ env.LOCATION }}
                   template: ./infra/policy-guardrails.bicep
                   parameters: >
+                      managedIdentityLocation=${{ env.LOCATION }}
                       @infra/parameters/policy-dev.parameters.json
                   deploymentName: policy-guardrails-${{ github.run_number }}
                   failOnStdErr: false

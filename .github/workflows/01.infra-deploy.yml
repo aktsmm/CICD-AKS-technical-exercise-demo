@@ -16,6 +16,7 @@ permissions:
 env:
   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_LOCATION_VAR: ${{ vars.AZURE_LOCATION }}
   LOCATION: ${{ vars.AZURE_LOCATION }}
   GRANT_OWNER_PARAMETER: ${{ vars.AZURE_GRANT_GITHUB_OWNER || 'false' }}
 
@@ -75,6 +76,28 @@ jobs:
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Resolve Deployment Location (bootstrap context)
+        if: ${{ vars.AZURE_GITHUB_PRINCIPAL_ID != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          location="${AZURE_LOCATION_VAR}"
+
+          if [ -z "$location" ] && [ -n "${RESOURCE_GROUP}" ]; then
+            echo "🔍 Repository variable AZURE_LOCATION が未設定のため、リソースグループ ${RESOURCE_GROUP} のリージョンを取得します。"
+            az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
+            location=$(az group show --name "${RESOURCE_GROUP}" --query location -o tsv 2>/dev/null || true)
+          fi
+
+          if [ -z "$location" ]; then
+            echo "::error::デプロイ先リージョンを特定できませんでした。GitHub Variables で AZURE_LOCATION を設定するか、既存リソースグループのリージョンを指定してください。"
+            exit 1
+          fi
+
+          echo "✅ インフラを展開するリージョン: $location"
+          echo "LOCATION=$location" >> "$GITHUB_ENV"
 
       - name: Ensure Resource Group Exists (bootstrap phase)
         if: ${{ vars.AZURE_GITHUB_PRINCIPAL_ID != '' }}
@@ -157,6 +180,31 @@ jobs:
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Resolve Deployment Location
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          location="${LOCATION}"
+
+          if [ -z "$location" ]; then
+            location="${AZURE_LOCATION_VAR}"
+          fi
+
+          if [ -z "$location" ] && [ -n "${RESOURCE_GROUP}" ]; then
+            echo "🔍 Repository variable AZURE_LOCATION が未設定のため、リソースグループ ${RESOURCE_GROUP} のリージョンを取得します。"
+            az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
+            location=$(az group show --name "${RESOURCE_GROUP}" --query location -o tsv 2>/dev/null || true)
+          fi
+
+          if [ -z "$location" ]; then
+            echo "::error::デプロイ先リージョンを特定できませんでした。GitHub Variables で AZURE_LOCATION を設定するか、既存リソースグループのリージョンを指定してください。"
+            exit 1
+          fi
+
+          echo "✅ インフラを展開するリージョン: $location"
+          echo "LOCATION=$location" >> "$GITHUB_ENV"
 
       - name: Ensure Required RBAC Permissions for Deployment
         id: check_deployment_permissions
