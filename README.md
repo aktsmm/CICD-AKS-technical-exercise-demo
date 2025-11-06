@@ -90,11 +90,11 @@
   - バックアップ完了後は標準出力とログにサイズ・URL・`curl` 例をまとめたサマリーを出力し、異常時は `::error::` 相当のメッセージで通知します。
 - 関連スクリプトと役割
 
-| スクリプト | 主な役割 |
-| ---------- | -------- |
-| `infra/scripts/setup-backup.sh` | バックアップスクリプト生成・Azure CLI 導入・Managed Identity ログイン・cron 登録を一括実行 |
-| `infra/scripts/setup-cron-backup.sh` | 既存 cron をクリーンアップし、`0 * * * *` の時間割で再構成 |
-| `infra/scripts/run-backup-now.sh` | 既存の `/usr/local/bin/mongodb-backup.sh` を呼び出すオンデマンド実行ラッパー（必要に応じて VM へ配置） |
+| スクリプト                           | 主な役割                                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `infra/scripts/setup-backup.sh`      | バックアップスクリプト生成・Azure CLI 導入・Managed Identity ログイン・cron 登録を一括実行             |
+| `infra/scripts/setup-cron-backup.sh` | 既存 cron をクリーンアップし、`0 * * * *` の時間割で再構成                                             |
+| `infra/scripts/run-backup-now.sh`    | 既存の `/usr/local/bin/mongodb-backup.sh` を呼び出すオンデマンド実行ラッパー（必要に応じて VM へ配置） |
 
 - 手動実行の例（MongoDB VM で実施）
 
@@ -372,6 +372,7 @@ CICD-AKS-technical-exercise/
 - Azure Policy を強化し、SSH 公開や HTTP 許可などの脆弱設定をステージング → 本番の順に段階的に禁止する。
 - AKS Workload Identity と Namespaced RBAC を導入し、Pod 単位で最小権限を徹底する。
 - GitGuardian SARIF が Security タブへ反映されるよう調査を継続し、必要に応じて GitHub Support や Advanced Security 設定の見直しを行う。
+- MongoDB バックアップ実行を GitHub Actions からスケジュールトリガーできるよう再設計し、VM 内 cron と Actions のどちらでも走らせられるハイブリッド構成を検討する。
 
 ## 参考資料
 
