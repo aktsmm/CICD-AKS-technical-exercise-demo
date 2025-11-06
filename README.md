@@ -79,6 +79,38 @@
 - ゼロトラスト: 現状はフラットなネットワークのため、Jump Host や Just-In-Time Access を組み合わせる拡張案を `今後の改善点` に整理しています。
 - 監査ログ: Subscription Activity Log を Log Analytics に転送し、`modules/workbook-security.bicep` で可視化ダッシュボードを自動生成します。GitHub Actions では SARIF をアップロードして監査証跡を保持します。
 
+## MongoDB バックアップ方式の詳細
+
+- バックアップ構成は `infra/scripts/setup-backup.sh` が自動展開し、MongoDB VM 上で次の処理を自動構成します。
+  - Azure CLI を取得（`curl -sL https://aka.ms/InstallAzureCLIDeb | bash`）し、バックアップスクリプト格納先 `/usr/local/bin`・ワークディレクトリ `/var/backups/mongodb`・ログ `/var/log/mongodb-backup.log` を生成。
+  - `mongodump` で `localhost:27017` からダンプを取得し、`.tar.gz` へ圧縮。失敗時は即座に終了してログへ `ERROR` を書き込みます。
+  - System Assigned Managed Identity で `az login --identity` を実行し、`az storage blob upload --auth-mode login` によりストレージ アカウントへシークレットレスで転送。
+  - 成果物は `mongodb_backup_YYYYMMDD_HHMMSS.tar.gz` 形式で Blob へ保存し、`find /var/backups/mongodb -mtime +7` で 7 日超のローカルファイルを削除して保持期間を管理。
+  - `crontab` の既存エントリをクリーンアップしたうえで `0 * * * * /usr/local/bin/mongodb-backup.sh`（毎時 0 分実行）を登録し、初回バックアップも自動実行。
+  - バックアップ完了後は標準出力とログにサイズ・URL・`curl` 例をまとめたサマリーを出力し、異常時は `::error::` 相当のメッセージで通知します。
+- 関連スクリプトと役割
+
+| スクリプト | 主な役割 |
+| ---------- | -------- |
+| `infra/scripts/setup-backup.sh` | バックアップスクリプト生成・Azure CLI 導入・Managed Identity ログイン・cron 登録を一括実行 |
+| `infra/scripts/setup-cron-backup.sh` | 既存 cron をクリーンアップし、`0 * * * *` の時間割で再構成 |
+| `infra/scripts/run-backup-now.sh` | 既存の `/usr/local/bin/mongodb-backup.sh` を呼び出すオンデマンド実行ラッパー（必要に応じて VM へ配置） |
+
+- 手動実行の例（MongoDB VM で実施）
+
+```bash
+# 即時バックアップを取りたい場合は本体スクリプトを直接実行
+sudo /usr/local/bin/mongodb-backup.sh
+
+# リポジトリの補助スクリプトを用いる場合（VM へ配置済みであることが前提）
+sudo /usr/local/bin/run-backup-now.sh
+```
+
+- 運用ヒント
+  - Blob Storage 側では VM の Managed Identity に `Storage Blob Data Contributor` を割り当てるため、`modules/vm-storage-role.bicep` のカスタマイズで運用環境に合わせたスコープ調整ができます。
+  - バックアップサイズや失敗率を監視に取り込む場合、`/var/log/mongodb-backup.log` を Azure Monitor Agent で収集し、失敗キーワードでアラート化するのが実践的です。
+  - `az storage blob upload --auth-mode login` による Azure AD 認証フローの詳細は [ストレージへの Azure AD 認証ガイド](https://learn.microsoft.com/ja-jp/azure/storage/blobs/authorize-access-azure-active-directory) に記載されています。Managed Identity でも同じフローでトークンを取得できるため、シークレットレス運用を保ちながらセキュリティを確保できます。 (#microsoft.docs.mcp)
+
 ## システムアーキテクチャ
 
 ```text
