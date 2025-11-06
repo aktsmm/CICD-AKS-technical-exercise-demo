@@ -1,4 +1,4 @@
-氏名: Tatsumi Yamamoto
+氏名: T.Y
 日付: 2025-11-06
 CICD-AKS-Technical Exercise
 
