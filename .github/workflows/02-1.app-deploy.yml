@@ -293,6 +293,7 @@ jobs:
           cp app/k8s/ingress-nginx-controller.yaml rendered/ingress-nginx-controller.yaml
 
           sed -i "s|<ACR_NAME>|${ACR_NAME}|g" rendered/deployment.yaml
+          sed -i "s|<IMAGE_NAME>|${{ env.IMAGE_NAME }}|g" rendered/deployment.yaml
           sed -i "s|<IMAGE_TAG>|${IMAGE_TAG}|g" rendered/deployment.yaml
 
       - name: Render Mongo Credentials Secret

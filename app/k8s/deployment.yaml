@@ -16,7 +16,7 @@ spec:
       serviceAccountName: default # Cluster Admin権限を持つServiceAccount
       containers:
         - name: guestbook
-          image: <ACR_NAME>.azurecr.io/guestbook:<IMAGE_TAG>
+          image: <ACR_NAME>.azurecr.io/<IMAGE_NAME>:<IMAGE_TAG>
           ports:
             - containerPort: 3000
           env:
