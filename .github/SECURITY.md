@@ -1,274 +1,252 @@
-# Security Policy
+# セキュリティポリシー
 
-## ⚠️ Important Notice
+## ⚠️ 重要なお知らせ
 
-**This project intentionally contains security vulnerabilities for educational purposes (Wiz Technical Exercise).**
+**このプロジェクトは教育目的で意図的にセキュリティ脆弱性を含んでいます。**
 
-All vulnerabilities are documented, tracked, and used to demonstrate security detection and remediation capabilities.
-
----
-
-## 🔒 Reporting a Vulnerability
-
-If you discover an **unintentional** security vulnerability in this project, please report it responsibly:
-
-### Option 1: GitHub Security Advisory (Recommended)
-
-1. Go to https://github.com/aktsmm/CICD-AKS-technical-exercise/security/advisories
-2. Click **"New draft security advisory"**
-3. Fill in the template with details
-4. Submit for review
-
-### Option 2: Private Email
-
-- **Email**: security@example.com (placeholder - update with actual contact)
-- **PGP Key**: Available on request
-- **Expected Response**: Within 48 hours
-
-### Option 3: GitHub Issue (Low Severity Only)
-
-For low-severity issues that are not security-critical, you may create a public GitHub issue.
+すべての脆弱性は文書化され、追跡され、セキュリティ検出と修復能力を実証するために使用されています。
 
 ---
 
-## 📋 Known Vulnerabilities (Intentional)
+## 🔒 脆弱性の報告
 
-The following vulnerabilities are **intentionally implemented** as part of the Wiz Technical Exercise requirements:
+このプロジェクトで**意図しない**セキュリティ脆弱性を発見した場合は、責任を持って報告してください:
 
-### 🔴 Critical Severity
+### オプション 1: GitHub セキュリティアドバイザリ（推奨）
 
-#### GHSA-001: Internet-facing SSH Port on MongoDB VM
+1. https://github.com/aktsmm/CICD-AKS-technical-exercise/security/advisories にアクセス
+2. **"New draft security advisory"** をクリック
+3. テンプレートに詳細を記入
+4. レビュー用に送信
+
+### オプション 2: プライベートメール
+
+- **メール**: security@example.com（プレースホルダー - 実際の連絡先に更新してください）
+- **PGP Key**: リクエストに応じて提供
+- **予想応答時間**: 48 時間以内
+
+### オプション 3: GitHub Issue（低重要度のみ）
+
+セキュリティクリティカルでない低重要度の問題については、公開の GitHub Issue を作成できます。
+
+---
+
+## 📋 既知の脆弱性（意図的）
+
+以下の脆弱性は、技術演習要件の一部として**意図的に実装**されています:
+
+### 🔴 クリティカル
+
+#### GHSA-001: MongoDB VM のインターネット公開 SSH ポート
 
 - **CVSS**: 9.8 Critical
-- **Status**: Known, intentional for demo
-- **Location**: [`infra/modules/vm-mongodb.bicep:123`](../infra/modules/vm-mongodb.bicep)
-- **Description**: SSH port (22) exposed to internet (0.0.0.0/0) through NSG rules
-- **Impact**: Brute-force attacks, unauthorized VM access
-- **Mitigation**: Restrict sourceAddressPrefix to specific IPs or use Azure Bastion
-- **Wiz Detection**: ✅ "Internet-facing VM with SSH enabled"
+- **ステータス**: 既知、デモ用に意図的
+- **場所**: [`infra/modules/vm-mongodb.bicep:123`](../infra/modules/vm-mongodb.bicep)
+- **説明**: NSG ルールを通じて SSH ポート(22)がインターネット(0.0.0.0/0)に公開
+- **影響**: ブルートフォース攻撃、不正な VM アクセス
+- **緩和策**: sourceAddressPrefix を特定の IP に制限するか、Azure Bastion を使用
+- **検出**: ✅ "SSH が有効なインターネット公開 VM"
 
-#### GHSA-003: Publicly Accessible MongoDB Backup Storage
+#### GHSA-003: 公開アクセス可能な MongoDB バックアップストレージ
 
 - **CVSS**: 9.1 Critical
-- **Status**: Known, intentional for demo
-- **Location**: [`infra/modules/storage.bicep:45`](../infra/modules/storage.bicep)
-- **Description**: Blob container with `publicAccess: 'Blob'` allows anonymous downloads
-- **Impact**: Data exfiltration, credential exposure
-- **Mitigation**: Set `publicAccess: 'None'` and use Private Endpoints
-- **Wiz Detection**: ✅ "Public Storage Container with Sensitive Data"
-- **Public URL Example**: `https://stwizdevj2axc7dgverlk.blob.core.windows.net/backups/mongodb_backup_*.tar.gz`
+- **ステータス**: 既知、デモ用に意図的
+- **場所**: [`infra/modules/storage.bicep:45`](../infra/modules/storage.bicep)
+- **説明**: `publicAccess: 'Blob'` を持つ Blob コンテナが匿名ダウンロードを許可
+- **影響**: データの流出、認証情報の露出
+- **緩和策**: `publicAccess: 'None'` を設定し、プライベートエンドポイントを使用
+- **検出**: ✅ "機密データを含む公開ストレージコンテナ"
+- **公開 URL 例**: `https://stwizdevj2axc7dgverlk.blob.core.windows.net/backups/mongodb_backup_*.tar.gz`
 
-#### GHSA-102: Hardcoded MongoDB Credentials in Environment Variables
+#### GHSA-102: 環境変数にハードコードされた MongoDB 認証情報
 
 - **CVSS**: 9.8 Critical
-- **Status**: Partially mitigated (Kubernetes Secrets)
-- **Location**: [`app/k8s/deployment.yaml:30`](../app/k8s/deployment.yaml)
-- **Description**: MongoDB connection string with embedded credentials
-- **Impact**: Credential leakage if pod is compromised
-- **Mitigation**: Use Azure Key Vault + Secrets Store CSI Driver
-- **Wiz Detection**: ✅ "Hardcoded Secrets in Container Environment"
+- **ステータス**: 部分的に緩和（Kubernetes Secrets）
+- **場所**: [`app/k8s/deployment.yaml:30`](../app/k8s/deployment.yaml)
+- **説明**: 認証情報が埋め込まれた MongoDB 接続文字列
+- **影響**: Pod が侵害された場合の認証情報漏洩
+- **緩和策**: Azure Key Vault + Secrets Store CSI Driver を使用
+- **検出**: ✅ "コンテナ環境内のハードコードされたシークレット"
 
-### 🟠 High Severity
+### 🟠 高
 
-#### GHSA-002: Excessive Cloud Permissions on MongoDB VM
+#### GHSA-002: MongoDB VM の過剰なクラウド権限
 
 - **CVSS**: 8.1 High
-- **Status**: Known, intentional for demo
-- **Location**: [`infra/modules/vm-mongodb.bicep:89`](../infra/modules/vm-mongodb.bicep)
-- **Description**: Managed Identity assigned Contributor role (can create/delete VMs)
-- **Impact**: Lateral movement, privilege escalation, resource manipulation
-- **Mitigation**: Assign minimal required permissions (Storage Blob Data Contributor only)
-- **Wiz Detection**: ✅ "Overprivileged Cloud Identity"
+- **ステータス**: 既知、デモ用に意図的
+- **場所**: [`infra/modules/vm-mongodb.bicep:89`](../infra/modules/vm-mongodb.bicep)
+- **説明**: マネージド ID に Contributor ロールが割り当てられている（VM 作成/削除可能）
+- **影響**: 横展開、権限昇格、リソース操作
+- **緩和策**: 最小限必要な権限のみを割り当て（Storage Blob Data Contributor のみ）
+- **検出**: ✅ "過剰な権限を持つクラウド ID"
 
-#### GHSA-101: Overprivileged Kubernetes Pod (cluster-admin)
+#### GHSA-101: 過剰な権限を持つ Kubernetes Pod（cluster-admin）
 
 - **CVSS**: 8.8 High
-- **Status**: Known, intentional for demo
-- **Location**: [`app/k8s/rbac.yaml:10`](../app/k8s/rbac.yaml)
-- **Description**: Default ServiceAccount bound to cluster-admin ClusterRole
-- **Impact**: Full cluster compromise if pod is exploited
-- **Mitigation**: Create dedicated ServiceAccount with least-privilege RBAC
-- **Wiz Detection**: ✅ "Overprivileged Kubernetes Workload"
+- **ステータス**: 既知、デモ用に意図的
+- **場所**: [`app/k8s/rbac.yaml:10`](../app/k8s/rbac.yaml)
+- **説明**: デフォルト ServiceAccount が cluster-admin ClusterRole にバインドされている
+- **影響**: Pod が悪用された場合のクラスタ全体の侵害
+- **緩和策**: 最小権限 RBAC を持つ専用 ServiceAccount を作成
+- **検出**: ✅ "過剰な権限を持つ Kubernetes ワークロード"
 
-#### GHSA-201: Disabled Security Scanning in CI/CD
+#### GHSA-201: CI/CD でのセキュリティスキャン無効化
 
 - **CVSS**: 7.3 High
-- **Status**: Known, intentional for demo
-- **Location**: [`.github/workflows/02-1.app-deploy.yml:45`](../.github/workflows/02-1.app-deploy.yml)
-- **Description**: Trivy vulnerability scanner commented out in pipeline
-- **Impact**: Vulnerable container images deployed to production
-- **Mitigation**: Uncomment Trivy action and fail build on HIGH/CRITICAL findings
-- **Wiz Detection**: ✅ "Missing Security Gates in Pipeline"
+- **ステータス**: 既知、デモ用に意図的
+- **場所**: [`.github/workflows/02-1.app-deploy.yml:45`](../.github/workflows/02-1.app-deploy.yml)
+- **説明**: パイプラインで Trivy 脆弱性スキャナがコメントアウトされている
+- **影響**: 脆弱なコンテナイメージが本番環境にデプロイされる
+- **緩和策**: Trivy アクションのコメントを解除し、HIGH/CRITICAL でビルドを失敗させる
+- **検出**: ✅ "パイプラインでのセキュリティゲート欠如"
 
-#### GHSA-202: Secrets Stored in GitHub Repository
+#### GHSA-202: GitHub リポジトリに保存されたシークレット
 
 - **CVSS**: 8.2 High
-- **Status**: Mitigated (GitHub Secrets)
-- **Location**: [`.github/workflows/01.infra-deploy.yml:20`](../.github/workflows/01.infra-deploy.yml)
-- **Description**: MongoDB password stored in GitHub Secrets (encrypted at rest)
-- **Impact**: Compromised GitHub account exposes secrets
-- **Mitigation**: Use Azure Key Vault with Managed Identity
-- **Wiz Detection**: ✅ "Credentials in CI/CD Variables"
+- **ステータス**: 緩和済み（GitHub Secrets）
+- **場所**: [`.github/workflows/01.infra-deploy.yml:20`](../.github/workflows/01.infra-deploy.yml)
+- **説明**: MongoDB パスワードが GitHub Secrets に保存されている（保存時に暗号化）
+- **影響**: GitHub アカウント侵害によるシークレット露出
+- **緩和策**: マネージド ID を使用した Azure Key Vault を使用
+- **検出**: ✅ "CI/CD 変数内の認証情報"
 
-### 🟡 Medium Severity
+### 🟡 中
 
-#### GHSA-004: Outdated MongoDB Version (4.4.29)
+#### GHSA-004: 古い MongoDB バージョン（4.4.29）
 
 - **CVSS**: 6.5 Medium
-- **Status**: Known, intentional (project requirement)
-- **Location**: [`infra/scripts/install-mongodb.sh:15`](../infra/scripts/install-mongodb.sh)
-- **Description**: MongoDB 4.4.29 has known CVEs (e.g., CVE-2021-32050)
-- **Impact**: Denial of service, potential remote code execution
-- **Mitigation**: Upgrade to MongoDB 7.0+ with security patches
-- **Wiz Detection**: ✅ "Outdated Database Version with Known CVEs"
+- **ステータス**: 既知、意図的（プロジェクト要件）
+- **場所**: [`infra/scripts/install-mongodb.sh:15`](../infra/scripts/install-mongodb.sh)
+- **説明**: MongoDB 4.4.29 には既知の CVE がある（例: CVE-2021-32050）
+- **影響**: サービス拒否、潜在的なリモートコード実行
+- **緩和策**: セキュリティパッチを含む MongoDB 7.0+にアップグレード
+- **検出**: ✅ "既知の CVE を持つ古いデータベースバージョン"
 
-#### GHSA-005: Outdated Operating System (Ubuntu 20.04)
+#### GHSA-005: 古いオペレーティングシステム（Ubuntu 20.04）
 
 - **CVSS**: 5.9 Medium
-- **Status**: Known, intentional (project requirement)
-- **Location**: [`infra/modules/vm-mongodb.bicep:67`](../infra/modules/vm-mongodb.bicep)
-- **Description**: Ubuntu 20.04 LTS (released April 2020) is >1 year old
-- **Impact**: Missing security patches for OS vulnerabilities
-- **Mitigation**: Upgrade to Ubuntu 22.04 LTS or later
-- **Wiz Detection**: ✅ "Outdated OS Version"
+- **ステータス**: 既知、意図的（プロジェクト要件）
+- **場所**: [`infra/modules/vm-mongodb.bicep:67`](../infra/modules/vm-mongodb.bicep)
+- **説明**: Ubuntu 20.04 LTS（2020 年 4 月リリース）は 1 年以上前のバージョン
+- **影響**: OS 脆弱性のセキュリティパッチ欠如
+- **緩和策**: Ubuntu 22.04 LTS 以降にアップグレード
+- **検出**: ✅ "古い OS バージョン"
 
-#### GHSA-103: Missing Rate Limiting on Web Application
+#### GHSA-103: Web アプリケーションのレート制限欠如
 
 - **CVSS**: 6.1 Medium
-- **Status**: Known, not implemented for simplicity
-- **Location**: [`app/app.js:25`](../app/app.js)
-- **Description**: Express.js application lacks rate limiting middleware
-- **Impact**: Denial of service via request flooding
-- **Mitigation**: Add `express-rate-limit` middleware
-- **Wiz Detection**: ❌ (Application-level control, not infrastructure)
+- **ステータス**: 既知、簡略化のため未実装
+- **場所**: [`app/app.js:25`](../app/app.js)
+- **説明**: Express.js アプリケーションにレート制限ミドルウェアが欠けている
+- **影響**: リクエストフラッディングによるサービス拒否
+- **緩和策**: `express-rate-limit`ミドルウェアを追加
+- **検出**: ❌（アプリケーションレベルの制御、インフラストラクチャではない）
 
 ---
 
-## 🛡️ Security Controls Implemented
+## 🛡️ 実装されているセキュリティ対策
 
-### Infrastructure Level
+### インフラストラクチャレベル
 
-- ✅ **Network Segmentation**: MongoDB in separate subnet (10.0.2.0/24)
-- ✅ **Authentication Required**: MongoDB enforces username/password auth
-- ✅ **Automated Backups**: Daily cron job to Azure Blob Storage
-- ✅ **Managed Identity**: VM uses Azure AD identity for resource access
-- ✅ **Private AKS Subnet**: Kubernetes nodes in private subnet (10.0.1.0/24)
+- ✅ **ネットワークセグメンテーション**: MongoDB は別サブネット（10.0.2.0/24）に配置
+- ✅ **認証必須**: MongoDB はユーザー名/パスワード認証を強制
+- ✅ **自動バックアップ**: Azure Blob Storage への日次 cron ジョブ
+- ✅ **マネージド ID**: VM はリソースアクセスに Azure AD ID を使用
+- ✅ **プライベート AKS サブネット**: Kubernetes ノードがプライベートサブネット（10.0.1.0/24）に配置
 
-### Application Level
+### アプリケーションレベル
 
-- ✅ **Kubernetes Secrets**: Credentials injected via Secret resources
-- ✅ **Container Registry**: Images stored in Azure Container Registry (ACR)
-- ✅ **HTTPS Ready**: Ingress controller supports TLS termination
-- ✅ **Input Validation**: Basic sanitization in Express.js routes
+- ✅ **Kubernetes Secrets**: Secret リソース経由で認証情報を注入
+- ✅ **コンテナレジストリ**: イメージを Azure Container Registry（ACR）に保存
+- ✅ **HTTPS 対応**: Ingress コントローラーが TLS 終端をサポート
+- ✅ **入力検証**: Express.js ルートでの基本的なサニタイゼーション
 
-### CI/CD Pipeline
+### CI/CD パイプライン
 
-- ✅ **Infrastructure as Code**: Bicep templates with version control
-- ✅ **Automated Deployment**: GitHub Actions workflows
-- ✅ **Pull Request Validation**: Bicep linting on PR
-- ⚠️ **Security Scanning**: Trivy available but disabled (demo purpose)
-
----
-
-## 🔍 Security Scanning Tools
-
-### Enabled
-
-- ✅ **Dependabot Alerts**: Automated dependency vulnerability scanning
-- ✅ **Secret Scanning**: Prevents credential leaks in commits
-- ✅ **CodeQL Analysis**: Static analysis for code vulnerabilities
-- ✅ **Bicep Linting**: Infrastructure code validation
-
-### Available but Disabled (for Demo)
-
-- ⚠️ **Trivy Container Scanning**: Image vulnerability detection
-- ⚠️ **OWASP Dependency Check**: Third-party library CVE scanning
-- ⚠️ **Checkov**: IaC security policy validation
+- ✅ **Infrastructure as Code**: バージョン管理された Bicep テンプレート
+- ✅ **自動デプロイ**: GitHub Actions ワークフロー
+- ✅ **プルリクエスト検証**: PR での Bicep lint
+- ⚠️ **セキュリティスキャン**: Trivy 利用可能だが無効化（デモ目的）
 
 ---
 
-## 📝 Responsible Disclosure Guidelines
+## 🔍 セキュリティスキャンツール
 
-### For Unintentional Vulnerabilities
+### 有効化済み
 
-If you discover a vulnerability that is **not listed above**:
+- ✅ **Dependabot アラート**: 依存関係の脆弱性自動スキャン
+- ✅ **シークレットスキャン**: コミット内の認証情報漏洩を防止
+- ✅ **CodeQL 分析**: コード脆弱性の静的解析
+- ✅ **Bicep Lint**: インフラストラクチャコードの検証
 
-1. **Do NOT** create a public GitHub issue
-2. **Do** use Security Advisories or private email
-3. **Allow** 90 days for remediation before public disclosure
-4. **Provide** detailed reproduction steps and proof of concept
-5. **Receive** credit in our security acknowledgments page
+### 利用可能だが無効化（デモ用）
 
-### Expected Timeline
-
-- **Initial Response**: 48 hours
-- **Triage & Validation**: 7 days
-- **Fix Development**: 30 days
-- **Patch Release**: 60 days
-- **Public Disclosure**: 90 days (coordinated with reporter)
+- ⚠️ **Trivy コンテナスキャン**: イメージ脆弱性検出
+- ⚠️ **OWASP 依存関係チェック**: サードパーティライブラリの CVE スキャン
+- ⚠️ **Checkov**: IaC セキュリティポリシー検証
 
 ---
 
-## 🎯 Wiz Technical Exercise Context
+## 📝 責任ある開示ガイドライン
 
-This repository is part of a technical interview exercise for Wiz. The intentional vulnerabilities demonstrate:
+### 意図しない脆弱性について
 
-1. **Understanding of Security Risks**: Recognition of common cloud misconfigurations
-2. **Detection Capabilities**: How security tools like Wiz identify these issues
-3. **Remediation Knowledge**: Practical solutions to mitigate each vulnerability
-4. **Defense in Depth**: Layered security controls across infrastructure, application, and pipeline
+**上記にリストされていない**脆弱性を発見した場合:
 
-### Presentation Notes
+1. 公開の GitHub Issue を**作成しない**
+2. セキュリティアドバイザリまたはプライベートメールを**使用する**
+3. 公開開示前に 90 日間の修復期間を**許可する**
+4. 詳細な再現手順と概念実証を**提供する**
+5. セキュリティ謝辞ページでクレジットを**受け取る**
 
-During the Wiz presentation, each vulnerability will be:
+### 予想されるタイムライン
 
-- ✅ Explained with technical details
-- ✅ Demonstrated with live proof-of-concept
-- ✅ Mapped to CVSS scores and CWE categories
-- ✅ Compared: "How would Wiz detect this vs GitHub tools?"
-- ✅ Remediated with best-practice solutions
+- **初回応答**: 48 時間
+- **トリアージと検証**: 7 日
+- **修正開発**: 30 日
+- **パッチリリース**: 60 日
+- **公開開示**: 90 日（報告者と調整）
 
 ---
 
-## 📚 Security Resources
+## 📚 セキュリティリソース
 
-### Documentation
+### ドキュメント
 
-- [Azure Security Best Practices](https://docs.microsoft.com/en-us/azure/security/fundamentals/best-practices-and-patterns)
-- [Kubernetes Security](https://kubernetes.io/docs/concepts/security/)
+- [Azure セキュリティベストプラクティス](https://docs.microsoft.com/ja-jp/azure/security/fundamentals/best-practices-and-patterns)
+- [Kubernetes セキュリティ](https://kubernetes.io/ja/docs/concepts/security/)
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [CIS Azure Foundations Benchmark](https://www.cisecurity.org/benchmark/azure)
 
-### Tools
+### ツール
 
-- [Wiz Security Platform](https://www.wiz.io/)
-- [Azure Defender](https://azure.microsoft.com/en-us/services/azure-defender/)
+- [Azure Defender](https://azure.microsoft.com/ja-jp/services/azure-defender/)
 - [Trivy](https://github.com/aquasecurity/trivy)
 - [Checkov](https://www.checkov.io/)
 
-### Training
+### トレーニング
 
-- [Azure Security Engineer Associate](https://docs.microsoft.com/en-us/certifications/azure-security-engineer/)
+- [Azure Security Engineer Associate](https://docs.microsoft.com/ja-jp/certifications/azure-security-engineer/)
 - [Certified Kubernetes Security Specialist (CKS)](https://www.cncf.io/certification/cks/)
 
 ---
 
-## 🙏 Security Acknowledgments
+## 🙏 セキュリティ謝辞
 
-We thank the following individuals for responsibly disclosing security issues:
+責任を持ってセキュリティ問題を開示してくださった以下の方々に感謝します:
 
-- _No unintentional vulnerabilities reported yet_
-
----
-
-## 📞 Contact
-
-**Project Maintainer**: Tatsumi Yamamoto  
-**Repository**: https://github.com/aktsmm/CICD-AKS-technical-exercise  
-**Purpose**: Wiz Technical Exercise (Educational)
+- _意図しない脆弱性はまだ報告されていません_
 
 ---
 
-**Last Updated**: 2025-10-31  
-**Version**: 1.0.0  
-**Status**: Active (Demo Project)
+## 📞 連絡先
+
+**プロジェクトメンテナー**: Tatsumi Yamamoto  
+**リポジトリ**: https://github.com/aktsmm/CICD-AKS-technical-exercise  
+**目的**: 技術演習（教育目的）
+
+---
+
+**最終更新**: 2025-11-06  
+**バージョン**: 1.0.0  
+**ステータス**: アクティブ（デモプロジェクト）
