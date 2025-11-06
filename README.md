@@ -343,6 +343,6 @@ CICD-AKS-technical-exercise/
 
 ## 参考資料
 
-- [GitHub Actions から Azure リソースをデプロイする方法](https://learn.microsoft.com/ja-jp/azure/developer/github/github-actions-workflow) (#microsoft.docs.mcp)
-- [AKS ネットワークとセキュリティのベストプラクティス](https://learn.microsoft.com/ja-jp/azure/aks/operator-best-practices-network) (#microsoft.docs.mcp)
-- [Azure Monitor と Log Analytics を活用したログ分析チュートリアル](https://learn.microsoft.com/ja-jp/azure/azure-monitor/logs/log-analytics-tutorial) (#microsoft.docs.mcp)
+- [GitHub Actions から Azure リソースをデプロイする方法](https://learn.microsoft.com/ja-jp/azure/developer/github/github-actions-workflow)
+- [AKS ネットワークとセキュリティのベストプラクティス](https://learn.microsoft.com/ja-jp/azure/aks/operator-best-practices-network)
+- [Azure Monitor と Log Analytics を活用したログ分析チュートリアル](https://learn.microsoft.com/ja-jp/azure/azure-monitor/logs/log-analytics-tutorial)
