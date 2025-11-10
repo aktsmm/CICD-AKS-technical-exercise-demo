@@ -18,7 +18,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   }
   kind: 'StorageV2'
   properties: {
-    accessTier: 'Hot'
+    accessTier: 'Cool'
     allowBlobPublicAccess: allowPublicBlobAccess  // 脆弱性
     minimumTlsVersion: 'TLS1_0'  // 脆弱性: 古いTLS
     supportsHttpsTrafficOnly: false  // 脆弱性: HTTP許可
