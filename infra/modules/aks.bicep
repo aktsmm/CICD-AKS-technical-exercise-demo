@@ -29,7 +29,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2023-10-01' = {
       {
         name: 'nodepool1'
         count: 2
-        vmSize: 'Standard_DS2_v2'
+        vmSize: 'Standard_B2s'
         osType: 'Linux'
         mode: 'System'
         vnetSubnetID: subnetId
