@@ -18,7 +18,7 @@ permissions:
     security-events: write
 
 env:
-    AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     AZURE_LOCATION_VAR: ${{ vars.AZURE_LOCATION }}
     AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
     LOCATION: ${{ vars.AZURE_LOCATION }}
