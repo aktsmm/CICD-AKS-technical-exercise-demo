@@ -134,8 +134,14 @@ jobs:
                       exit 1
                   fi
 
+                  CLIENT_ID=$(jq -r '.clientId // empty' <<< '${{ secrets.AZURE_CREDENTIALS }}')
+                  if [ -z "$CLIENT_ID" ]; then
+                      echo "::error::サービスプリンシパルの clientId をシークレットから取得できませんでした。JSON 形式とキー名を確認してください。"
+                      exit 1
+                  fi
+
                   echo "Checking if Service Principal has 'Resource Policy Contributor' role..."
-                  SP_OBJECT_ID=$(az ad sp list --filter "appId eq '$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientId)"' --query '[0].id' -o tsv)
+                  SP_OBJECT_ID=$(az ad sp list --filter "appId eq '${CLIENT_ID}'" --query '[0].id' -o tsv)
 
                   echo "SP_OBJECT_ID=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
 
