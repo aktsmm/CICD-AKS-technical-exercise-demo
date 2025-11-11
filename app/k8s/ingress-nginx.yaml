@@ -1,0 +1,25 @@
+# Alternative Ingress using NGINX (simpler setup)
+# Manual sample only: CI/CD pipeline does not apply this manifest automatically.
+# Use this if Application Gateway is not configured
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guestbook-ingress-nginx
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: guestbook-service
+                port:
+                  number: 80
+---
+# To install NGINX Ingress Controller, run:
+# kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/cloud/deploy.yaml
