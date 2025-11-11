@@ -194,14 +194,14 @@ MongoDB VM
 Storage Account (Blob)
 ```
 
-| 経路                | プロトコル / ポート  | 備考                                         |
-| ------------------- | -------------------- | -------------------------------------------- |
-| 利用者 → Ingress    | HTTP/HTTPS : 80, 443 | nip.io ドメインで証明書を自動割り当て        |
-| Ingress → Service   | HTTP : 80            | Ingress アノテーションで `/` へルーティング  |
-| Service → Pod       | HTTP : 3000          | Liveness / Readiness Probe も同ポート        |
-| Pod → MongoDB VM    | TCP : 27017          | NSG で `10.0.1.0/24` のみ許可                |
-| 管理者 → MongoDB VM | SSH : 22             | デモ用に 0.0.0.0/0 を許容 (本番では閉鎖推奨) |
-| VM → Storage        | HTTPS : 443          | Managed Identity + AzCopy によるバックアップ |
+| 経路                | プロトコル / ポート  | 備考                                             |
+| ------------------- | -------------------- | ------------------------------------------------ |
+| 利用者 → Ingress    | HTTP/HTTPS : 80, 443 | selfsigned-issuer + `<IP>.nip.io` で自己署名 TLS |
+| Ingress → Service   | HTTP : 80            | Ingress アノテーションで `/` へルーティング      |
+| Service → Pod       | HTTP : 3000          | Liveness / Readiness Probe も同ポート            |
+| Pod → MongoDB VM    | TCP : 27017          | NSG で `10.0.1.0/24` のみ許可                    |
+| 管理者 → MongoDB VM | SSH : 22             | デモ用に 0.0.0.0/0 を許容 (本番では閉鎖推奨)     |
+| VM → Storage        | HTTPS : 443          | Managed Identity + AzCopy によるバックアップ     |
 
 ## CI/CD 構成とデプロイ手順
 
@@ -276,9 +276,9 @@ kubectl get pods -A
 
   ```powershell
   # プロジェクトをクローン
-  git clone https://github.com/<YOUR_ACCOUNT>/CICD-AKS-technical-exercise.git
+  git clone https://github.com/<YOUR_ACCOUNT>/CICD-AKS-technical-exercise-demo.git
   # 作業ディレクトリへ移動
-  Set-Location CICD-AKS-technical-exercise
+  Set-Location CICD-AKS-technical-exercise-demo
   ```
 
 - **Step 2: Azure CLI でログイン**
@@ -310,9 +310,9 @@ kubectl get pods -A
 
   ```powershell
   # インフラをデプロイ (Workflow Dispatch)
-  gh workflow run infra-deploy.yml
+  gh workflow run "1. Deploy Infrastructure"
   # 完了後にアプリをデプロイ
-  gh workflow run azure-pipelines-app.yml
+  gh workflow run "2-1. Build and Deploy Application"
   ```
 
 必要ツール (推奨バージョンは SetupGuide に記載): Azure CLI 最新版、GitHub CLI (`gh`)、Git、PowerShell 7 以上または Bash、kubectl、Docker。
@@ -320,7 +320,7 @@ kubectl get pods -A
 ## ディレクトリ構成とファイル説明
 
 ```text
-CICD-AKS-technical-exercise/
+CICD-AKS-technical-exercise-demo/
 ├─ app/                      # Node.js アプリと Kubernetes マニフェスト
 │  ├─ app.js                 # Express アプリ本体 (Mongo 連携)
 │  ├─ Dockerfile             # コンテナビルド定義
@@ -331,13 +331,14 @@ CICD-AKS-technical-exercise/
 │  ├─ modules/               # VNet / AKS / ACR / VM などのモジュラー定義
 │  ├─ parameters/            # dev 用パラメータ例
 │  └─ scripts/               # MongoDB セットアップ・バックアップ脚本
-├─ pipelines/                # GitHub Actions ワークフロー (インフラ・アプリ)
+├─ pipelines/                # GitHub Actions サンプル (Azure DevOps 連携用テンプレート)
 ├─ Scripts/                  # PowerShell セットアップ支援ツール
-├─ docs/                     # 設計メモ・セキュリティ / 運用ノウハウ
-└─ Docs_issue_point/         # 調査ログ・課題管理メモ
+├─ Docs/                     # 設計メモ・セキュリティ / 運用ノウハウ
+├─ Docs_issue_point/         # 調査ログ・課題管理メモ
+└─ documentation/            # プレゼン資料・追加ドキュメント
 ```
 
-初心者は `SetupGuide.md` → `infra/main.bicep` → `app/k8s/` の順に読み進めると構成を理解しやすく、詳細な背景やトラブルシューティングは `docs/` に整理されています。
+初心者は `SetupGuide.md` → `infra/main.bicep` → `app/k8s/` の順に読み進めると構成を理解しやすく、詳細な背景やトラブルシューティングは `Docs/` に整理されています。
 
 ## 主要ファイルの技術的説明
 
