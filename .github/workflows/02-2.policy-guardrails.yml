@@ -70,6 +70,13 @@ jobs:
             - name: Resolve Deployment Location
               shell: bash
               run: |
+                  SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-${{ vars.AZURE_SUBSCRIPTION_ID }}}"
+
+                  if [ -z "$SUBSCRIPTION_ID" ]; then
+                      echo "::error::AZURE_SUBSCRIPTION_ID が未設定です。GitHub Variables を確認してください。"
+                      exit 1
+                  fi
+
                   location="${AZURE_LOCATION_VAR}"
 
                   if [ -z "$location" ] && [ -n "${AZURE_RESOURCE_GROUP}" ]; then
@@ -96,7 +103,7 @@ jobs:
                   for assignment in "${assignments[@]}"; do
                       existing_location=$(az policy assignment show \
                         --name "$assignment" \
-                        --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}" \
+                        --scope "/subscriptions/${SUBSCRIPTION_ID}" \
                         --query location -o tsv 2>/dev/null || true)
 
                       if [ -n "$existing_location" ]; then
@@ -115,20 +122,27 @@ jobs:
 
                   echo "✅ Azure Policy を展開するリージョン: $location"
                   echo "LOCATION=$location" >> "$GITHUB_ENV"
+                  echo "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID" >> "$GITHUB_ENV"
 
             - name: Verify Required RBAC Permissions
               id: check_permissions
               shell: bash
               run: |
+                  SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-${{ vars.AZURE_SUBSCRIPTION_ID }}}"
+                  if [ -z "$SUBSCRIPTION_ID" ]; then
+                      echo "::error::AZURE_SUBSCRIPTION_ID が解決できません。GitHub Variables を確認してください。"
+                      exit 1
+                  fi
+
                   echo "Checking if Service Principal has 'Resource Policy Contributor' role..."
-                  SP_OBJECT_ID=$(az ad sp list --filter "appId eq '$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientId)'" --query '[0].id' -o tsv)
+                  SP_OBJECT_ID=$(az ad sp list --filter "appId eq '$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientId)"' --query '[0].id' -o tsv)
 
                   echo "SP_OBJECT_ID=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
 
                   ROLE_ASSIGNED=$(az role assignment list \
                     --assignee-object-id "$SP_OBJECT_ID" \
                     --role "Resource Policy Contributor" \
-                    --scope "/subscriptions/${{ env.AZURE_SUBSCRIPTION_ID }}" \
+                    --scope "/subscriptions/${SUBSCRIPTION_ID}" \
                     --query '[].roleDefinitionName' -o tsv)
 
                   if [ -z "$ROLE_ASSIGNED" ]; then
@@ -143,7 +157,7 @@ jobs:
                       --assignee-object-id "$SP_OBJECT_ID" \
                       --assignee-principal-type ServicePrincipal \
                       --role "Resource Policy Contributor" \
-                      --scope "/subscriptions/${{ env.AZURE_SUBSCRIPTION_ID }}" 2>/dev/null; then
+                      --scope "/subscriptions/${SUBSCRIPTION_ID}" 2>/dev/null; then
                       echo "✅ Successfully assigned 'Resource Policy Contributor' role"
                       echo "has_permission=true" >> $GITHUB_OUTPUT
                     else
@@ -152,7 +166,7 @@ jobs:
                       echo "::error::    --assignee-object-id $SP_OBJECT_ID \\"
                       echo "::error::    --assignee-principal-type ServicePrincipal \\"
                       echo "::error::    --role 'Resource Policy Contributor' \\"
-                      echo "::error::    --scope '/subscriptions/${{ env.AZURE_SUBSCRIPTION_ID }}'"
+                      echo "::error::    --scope '/subscriptions/${SUBSCRIPTION_ID}'"
                       echo "has_permission=false" >> $GITHUB_OUTPUT
                     fi
                   else
