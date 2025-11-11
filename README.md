@@ -232,7 +232,8 @@ Push / Pull Request / workflow_dispatch
 
 - 事前準備
   - Azure サブスクリプションとリソースグループ (`rg-bbs-cicd-aks`)
-  - GitHub Secrets: `AZURE_CREDENTIALS`, `AZURE_SUBSCRIPTION_ID`, `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `MONGO_ADMIN_PASSWORD`, `GITGUARDIAN_API_KEY` (任意)
+  - GitHub Secrets: `AZURE_CREDENTIALS`, `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `MONGO_ADMIN_PASSWORD`, `GITGUARDIAN_API_KEY` (任意)
+  - GitHub Variables: `AZURE_SUBSCRIPTION_ID`
   - GitHub Variables: `AZURE_RESOURCE_GROUP`, `AZURE_LOCATION`, `IMAGE_NAME`, `AZURE_GITHUB_PRINCIPAL_ID`, `AZURE_GRANT_GITHUB_OWNER`
   - 詳細な登録手順と補足は `SetupGuide.md` を参照
 - 手動準備が必要な主な項目
