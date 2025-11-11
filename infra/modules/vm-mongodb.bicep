@@ -175,9 +175,9 @@ resource vmExtension 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' =
     forceUpdateTag: forceUpdateTag  // 毎回拡張を再実行
     settings: {
       fileUris: [
-        'https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise/main/infra/scripts/install-mongodb.sh'
-        'https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise/main/infra/scripts/setup-mongodb-auth.sh'
-        'https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise/main/infra/scripts/setup-backup.sh'
+        'https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise-demo/main/infra/scripts/install-mongodb.sh'
+        'https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise-demo/main/infra/scripts/setup-mongodb-auth.sh'
+        'https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise-demo/main/infra/scripts/setup-backup.sh'
       ]
     }
     protectedSettings: {

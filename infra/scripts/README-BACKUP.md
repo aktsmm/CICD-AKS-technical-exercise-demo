@@ -4,6 +4,8 @@
 
 MongoDB VM 上で **1 日 3 回自動バックアップ** を実行する cron ベースのバックアップシステムです。
 
+> ℹ️ バックアップ構成は `setup-backup.sh` が一括で作成します。再設定が必要な場合は本スクリプトを再実行するか、後述の手順で cron エントリを直接編集してください。
+
 ### バックアップスケジュール
 
 | 時刻 (JST) | 時刻 (UTC)   | 説明             |
@@ -39,7 +41,7 @@ az vm run-command invoke `
   --scripts @"
 export MONGO_ADMIN_USER='$MONGO_ADMIN_USER'
 export MONGO_ADMIN_PASSWORD='$MONGO_ADMIN_PASSWORD'
-curl -fsSL https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise/main/infra/scripts/setup-backup.sh | bash -s -- '$STORAGE_ACCOUNT' 'backups'
+curl -fsSL https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise-demo/main/infra/scripts/setup-backup.sh | bash -s -- '$STORAGE_ACCOUNT' 'backups'
 "@
 ```
 
@@ -64,44 +66,23 @@ az vm run-command invoke \
   --scripts "
 export MONGO_ADMIN_USER='$MONGO_ADMIN_USER'
 export MONGO_ADMIN_PASSWORD='$MONGO_ADMIN_PASSWORD'
-curl -fsSL https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise/main/infra/scripts/setup-backup.sh | bash -s -- '$STORAGE_ACCOUNT' 'backups'
+curl -fsSL https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise-demo/main/infra/scripts/setup-backup.sh | bash -s -- '$STORAGE_ACCOUNT' 'backups'
 "
 ```
 
-### 2. cron ジョブの設定
+### 2. cron ジョブを再適用したい場合 (任意)
 
-**PowerShell (推奨):**
+`setup-backup.sh` は root ユーザーの crontab に `0 * * * * /usr/local/bin/mongodb-backup.sh` を登録します。実行タイミングを変更したい場合は以下のいずれかで調整してください。
 
-```powershell
-# スクリプトをダウンロードして一時ファイルに保存
-$cronScript = Invoke-WebRequest -Uri "https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise/main/infra/scripts/setup-cron-backup.sh" -UseBasicParsing | Select-Object -ExpandProperty Content
-
-# VM で実行
-az vm run-command invoke `
-  --resource-group $RG `
-  --name $VM_NAME `
-  --command-id RunShellScript `
-  --scripts $cronScript
-```
-
-**Bash (Linux/macOS):**
+- `setup-backup.sh` を再実行し、スクリプト内の cron 行 (`0 * * * * /usr/local/bin/mongodb-backup.sh ...`) を事前に編集してから適用する。
+- VM へ SSH ログインし、`sudo crontab -e` で該当行を編集したのち `sudo systemctl reload cron` を実行する。
 
 ```bash
-# VM で setup-cron-backup.sh を実行
-az vm run-command invoke \
-  --resource-group "$RG" \
-  --name "$VM_NAME" \
-  --command-id RunShellScript \
-  --scripts "$(curl -fsSL https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise/main/infra/scripts/setup-cron-backup.sh)"
+# 現在設定されている cron エントリを確認
+sudo crontab -l | grep mongodb-backup
 ```
 
-**VM 内で直接実行:**
-
-```bash
-sudo curl -fsSL https://raw.githubusercontent.com/aktsmm/CICD-AKS-technical-exercise/main/infra/scripts/setup-cron-backup.sh -o /tmp/setup-cron.sh
-sudo chmod +x /tmp/setup-cron.sh
-sudo /tmp/setup-cron.sh
-```
+> ℹ️ 旧 `manual/setup-cron-backup.sh` は削除済みです。上記のいずれかの方法で最新状態を維持してください。
 
 ---
 
@@ -110,10 +91,6 @@ sudo /tmp/setup-cron.sh
 ### VM 内で実行
 
 ```bash
-# 方法1: オンデマンドスクリプト使用
-sudo /usr/local/bin/run-backup-now.sh
-
-# 方法2: バックアップスクリプト直接実行
 sudo /usr/local/bin/mongodb-backup.sh
 ```
 
@@ -229,7 +206,7 @@ az account show
 
 ## 📦 バックアップファイル構造
 
-```
+```text
 /var/backups/mongodb/
 └── mongodb_backup_20250105_020000.tar.gz  # YYYYMMDD_HHMMSS 形式
 
@@ -254,8 +231,6 @@ Azure Storage:
 | ファイル                           | 説明                               |
 | ---------------------------------- | ---------------------------------- |
 | `setup-backup.sh`                  | バックアップスクリプトインストール |
-| `setup-cron-backup.sh`             | cron ジョブ設定                    |
-| `run-backup-now.sh`                | オンデマンドバックアップ実行       |
 | `/usr/local/bin/mongodb-backup.sh` | 実際のバックアップスクリプト       |
 | `/var/log/mongodb-backup.log`      | バックアップログ                   |
 
@@ -267,7 +242,7 @@ Azure Storage:
 A: いいえ。手動削除が必要です。将来的にログローテーション機能を追加予定。
 
 **Q: バックアップ時刻を変更したい**  
-A: `setup-cron-backup.sh` の `CRON_JOBS` 配列を編集して再実行してください。
+A: `/etc/cron.d/mongodb-backup` を編集して `cron` を再読み込みするか、`setup-backup.sh` を再実行してください。
 
 **Q: GitHub Actions は使わないの？**  
 A: Azure Run Command の不安定性により、VM 内 cron に変更しました。より信頼性が高く、シンプルです。

@@ -94,17 +94,13 @@
 | スクリプト                           | 主な役割                                                                                               |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `infra/scripts/setup-backup.sh`      | バックアップスクリプト生成・Azure CLI 導入・Managed Identity ログイン・cron 登録を一括実行             |
-| `infra/scripts/setup-cron-backup.sh` | 既存 cron をクリーンアップし、`0 * * * *` の時間割で再構成                                             |
-| `infra/scripts/run-backup-now.sh`    | 既存の `/usr/local/bin/mongodb-backup.sh` を呼び出すオンデマンド実行ラッパー（必要に応じて VM へ配置） |
+| `/usr/local/bin/mongodb-backup.sh`    | `setup-backup.sh` が生成するバックアップ本体スクリプト。MongoDB のダンプ取得と Blob 転送を実行        |
 
 - 手動実行の例（MongoDB VM で実施）
 
 ```bash
 # 即時バックアップを取りたい場合は本体スクリプトを直接実行
 sudo /usr/local/bin/mongodb-backup.sh
-
-# リポジトリの補助スクリプトを用いる場合（VM へ配置済みであることが前提）
-sudo /usr/local/bin/run-backup-now.sh
 ```
 
 - 運用ヒント
@@ -331,7 +327,6 @@ CICD-AKS-technical-exercise-demo/
 │  ├─ modules/               # VNet / AKS / ACR / VM などのモジュラー定義
 │  ├─ parameters/            # dev 用パラメータ例
 │  └─ scripts/               # MongoDB セットアップ・バックアップ脚本
-├─ pipelines/                # GitHub Actions サンプル (Azure DevOps 連携用テンプレート)
 ├─ Scripts/                  # PowerShell セットアップ支援ツール
 ├─ Docs/                     # 設計メモ・セキュリティ / 運用ノウハウ
 ├─ Docs_issue_point/         # 調査ログ・課題管理メモ
@@ -355,8 +350,7 @@ CICD-AKS-technical-exercise-demo/
 
 ### GitHub Actions ワークフロー
 
-- `pipelines/azure-pipelines-infra.yml`: Checkov による IaC スキャン後に `azure/arm-deploy@v1` で Bicep をデプロイし、出力をアーティファクト化します。
-- `pipelines/azure-pipelines-app.yml`: Trivy でコンテナスキャン、Docker ビルド/プッシュ、`kubectl apply` による AKS デプロイを実施し、イメージタグをジョブ間で受け渡します。
+- `.github/workflows/01.infra-deploy.yml` などの GitHub Actions が正規フローです。Azure ログイン後に Bicep/AKS をデプロイし、SARIF をセキュリティタブへ送信します。
 
 ### スクリプト
 
