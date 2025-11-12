@@ -107,7 +107,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
         {
           type: 1
           content: {
-            json: '### � ガバナンス・コンプライアンス\n\nPolicy の適用状況や操作密度を示し、統制の健全性を確認します。'
+            json: '### Governance & Compliance\n\nPolicy の適用状況や操作密度を示し、統制の健全性を確認します。'
           }
           name: 'text-governance'
         }
@@ -130,7 +130,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
         {
           type: 1
           content: {
-            json: '### �🔒 外部公開リソース監視\n\nIP 制限なしで外部アクセスを許可している構成を棚卸しし、優先的に改善すべき対象を把握します。'
+            json: '### External Exposure Watch\n\nIP 制限なしで外部アクセスを許可している構成を棚卸しし、優先的に改善すべき対象を把握します。'
           }
           name: 'text-external-access'
         }
@@ -226,7 +226,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let NsgRules = resources\n| where type =~ "microsoft.network/networksecuritygroups/securityrules"\n| extend access = tostring(properties.access), direction = tostring(properties.direction), source = tostring(properties.sourceAddressPrefix)\n| where access == "Allow" and direction == "Inbound"\n| where source in ("*", "0.0.0.0/0", "Internet")\n| extend NsgId = tostring(split(id, "/securityRules/")[0])\n| project SubscriptionId = subscriptionId, ResourceGroup = resourceGroup, NsgId, RuleName = name, Priority = tostring(properties.priority), DestinationPort = tostring(properties.destinationPortRange), Protocol = tostring(properties.protocol), SourcePrefix = source\n| order by toint(Priority) asc nulls last;\nlet HasRules = toscalar(NsgRules | count) > 0;\nNsgRules\n| take 50\n| union (print Message = "✅ インターネットからの直接アクセスを許可するNSGルールは検出されませんでした", SubscriptionId = "", ResourceGroup = "", NsgId = "", RuleName = "", Priority = "", DestinationPort = "", Protocol = "", SourcePrefix = "" | where not(HasRules))\n| project-away Message'
+            query: 'let NsgRules = resources\n| where type =~ "microsoft.network/networksecuritygroups/securityrules"\n| extend access = tostring(properties.access), direction = tostring(properties.direction), source = tostring(properties.sourceAddressPrefix)\n| where access == "Allow" and direction == "Inbound"\n| where source in ("*", "0.0.0.0/0", "Internet")\n| extend NsgId = tostring(split(id, "/securityRules/")[0])\n| project SubscriptionId = subscriptionId, ResourceGroup = resourceGroup, NsgId, RuleName = name, Priority = tostring(properties.priority), DestinationPort = tostring(properties.destinationPortRange), Protocol = tostring(properties.protocol), SourcePrefix = source\n| order by toint(Priority) asc nulls last;\nlet Summary = NsgRules | summarize Count = count();\nNsgRules\n| extend Note = ""\n| take 50\n| union (Summary | where Count == 0 | project SubscriptionId = "", ResourceGroup = "", NsgId = "", RuleName = "", Priority = "", DestinationPort = "", Protocol = "", SourcePrefix = "", Note = "✅ インターネットからの直接アクセスを許可するNSGルールは検出されませんでした")'
             size: 0
             title: '外部許可 NSG ルール (最新状態)'
             queryType: 1
@@ -246,7 +246,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let Alerts = SecurityAlert\n| where TimeGenerated > ago(7d)\n| summarize Count = count() by AlertName, AlertSeverity, ProductName\n| order by Count desc;\nlet HasAlerts = toscalar(Alerts | count) > 0;\nAlerts\n| union (print Message = "⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間でアラートデータが表示されます", AlertName = "", AlertSeverity = "", ProductName = "", Count = 0 | where not(HasAlerts))\n| project-away Message'
+            query: 'let Alerts = union isfuzzy=true (\n  SecurityAlert\n  | where TimeGenerated > ago(7d)\n  | summarize Count = count() by AlertName, AlertSeverity, ProductName\n  | order by Count desc,\n  datatable(AlertName:string, AlertSeverity:string, ProductName:string, Count:long)[]\n);\nlet HasAlerts = toscalar(Alerts | where isnotempty(AlertName) | count) > 0;\nAlerts\n| where isnotempty(AlertName)\n| union (datatable(AlertName:string, AlertSeverity:string, ProductName:string, Count:long)["⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間でアラートデータが表示されます", "", "", 0] | where not(HasAlerts))'
             size: 0
             title: '過去7日間の Defender アラート'
             timeContext: {
@@ -293,7 +293,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let AlertDensity = SecurityAlert\n| where TimeGenerated > ago(7d)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(AlertDensity | count) > 0;\nAlertDensity\n| union (print Message = "⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間でアラートデータが表示されます", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
+            query: 'let AlertDensity = union isfuzzy=true (\n  SecurityAlert\n  | where TimeGenerated > ago(7d)\n  | summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n  | order by Alerts desc\n  | take 10,\n  datatable(ResourceGroup:string, Alerts:long, HighSeverity:long)[]\n);\nlet HasData = toscalar(AlertDensity | where isnotempty(ResourceGroup) | count) > 0;\nAlertDensity\n| where isnotempty(ResourceGroup)\n| union (datatable(ResourceGroup:string, Alerts:long, HighSeverity:long)["⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間でアラートデータが表示されます", 0, 0] | where not(HasData))'
             size: 0
             title: 'Defender アラート密度 (リソースグループ別)'
             timeContext: {
@@ -320,7 +320,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let Recommendations = SecurityRecommendation\n| where TimeGenerated > ago(1d)\n| summarize arg_max(TimeGenerated, *) by RecommendationName\n| summarize Count = count() by RecommendationSeverity\n| order by Count desc;\nlet HasData = toscalar(Recommendations | count) > 0;\nRecommendations\n| union (print Message = "⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間で推奨事項データが表示されます", RecommendationSeverity = "", Count = 0 | where not(HasData))\n| project-away Message'
+            query: 'let Recommendations = union isfuzzy=true (\n  SecurityRecommendation\n  | where TimeGenerated > ago(1d)\n  | summarize arg_max(TimeGenerated, *) by RecommendationName\n  | summarize Count = count() by RecommendationSeverity\n  | order by Count desc,\n  datatable(RecommendationSeverity:string, Count:long)[]\n);\nlet HasData = toscalar(Recommendations | where isnotempty(RecommendationSeverity) | count) > 0;\nRecommendations\n| where isnotempty(RecommendationSeverity)\n| union (datatable(RecommendationSeverity:string, Count:long)["⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間で推奨事項データが表示されます", 0] | where not(HasData))'
             size: 0
             title: 'セキュリティ推奨事項 (重要度別)'
             timeContext: {
