@@ -259,6 +259,10 @@ module defenderContinuousExport 'modules/defender-continuous-export.bicep' = if 
     resourceGroupLocation: defenderContinuousExportResourceGroupLocation
     workspaceResourceId: monitoring.outputs.workspaceId
   }
+  dependsOn: [
+    subscriptionActivityDiagnostics  // Activity Log の診断設定完了を待つ
+    diagnostics                       // リソース診断設定完了を待つ
+  ]
 }
 
 output aksClusterName string = aks.outputs.clusterName
