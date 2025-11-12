@@ -6,13 +6,10 @@ param environment string
 @description('アラート発火時に呼び出すアクショングループのリソース ID。通知が不要な場合は空文字のままとしてください。')
 param actionGroupResourceId string = ''
 
-var actionGroupEntries = empty(actionGroupResourceId) ? [] : [
-  {
-    actionGroupId: actionGroupResourceId
-  }
-]
+var hasActionGroup = !empty(actionGroupResourceId)
 
-resource storagePublicAccessAlert 'Microsoft.Insights/activityLogAlerts@2020-10-01' = {
+// アクショングループが未指定の場合はアラート自体をスキップし、デプロイ失敗を防ぐ
+resource storagePublicAccessAlert 'Microsoft.Insights/activityLogAlerts@2020-10-01' = if (hasActionGroup) {
   name: 'ala-storage-public-${environment}'
   location: 'global'
   properties: union({
@@ -43,9 +40,13 @@ resource storagePublicAccessAlert 'Microsoft.Insights/activityLogAlerts@2020-10-
         }
       ]
     }
-  }, empty(actionGroupEntries) ? {} : {
+  }, {
     actions: {
-      actionGroups: actionGroupEntries
+      actionGroups: [
+        {
+          actionGroupId: actionGroupResourceId
+        }
+      ]
     }
   })
 }
