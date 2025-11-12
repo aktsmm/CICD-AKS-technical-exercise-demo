@@ -135,6 +135,67 @@ jobs:
           category: "/language:javascript"
         continue-on-error: true # ✅ 統一: 解析失敗でもジョブ続行
 
+      - name: Summarize CodeQL Findings
+        if: always()
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+          const sarifPath = path.join(process.cwd(), 'codeql-results', 'javascript.sarif');
+
+          const append = (line = '') => {
+            fs.appendFileSync(summaryFile, `${line}\n`);
+          };
+
+          append('### CodeQL 解析結果');
+
+          if (!fs.existsSync(sarifPath)) {
+            append('解析結果ファイルが見つかりませんでした。`Analyze` ステップのログを確認してください。');
+            append();
+            process.exit(0);
+          }
+
+          const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf-8'));
+          const results = sarif?.runs?.[0]?.results ?? [];
+
+          append(`検出数: **${results.length}**`);
+          append();
+
+          const severityOrder = ['Critical', 'High', 'Medium', 'Low', 'Other'];
+          const severityCounts = Object.fromEntries(severityOrder.map((k) => [k, 0]));
+          const levelOrder = ['error', 'warning', 'note', 'none'];
+          const levelCounts = Object.fromEntries(levelOrder.map((k) => [k, 0]));
+
+          for (const item of results) {
+            const severityRaw = item?.properties?.securitySeverity || item?.properties?.severity;
+            const severityKey = severityOrder.includes(severityRaw) ? severityRaw : 'Other';
+            severityCounts[severityKey] += 1;
+
+            const levelRaw = item?.level || 'none';
+            const levelKey = levelOrder.includes(levelRaw) ? levelRaw : 'none';
+            levelCounts[levelKey] += 1;
+          }
+
+          append('| Severity | Count |');
+          append('| --- | --- |');
+          for (const key of severityOrder) {
+            append(`| ${key} | ${severityCounts[key]} |`);
+          }
+          append();
+
+          append('| Level | Count |');
+          append('| --- | --- |');
+          for (const key of levelOrder) {
+            append(`| ${key} | ${levelCounts[key]} |`);
+          }
+          append();
+
+          append('詳細は Code Scanning Alerts を参照してください。');
+          append();
+          EOF
+
   scan-container:
     name: Scan Container Image
     runs-on: ubuntu-latest
@@ -165,6 +226,68 @@ jobs:
         continue-on-error: true
         with:
           sarif_file: trivy-results.sarif
+
+      - name: Summarize Trivy Findings
+        if: always()
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+          const sarifPath = path.join(process.cwd(), 'trivy-results.sarif');
+
+          const append = (line = '') => {
+            fs.appendFileSync(summaryFile, `${line}\n`);
+          };
+
+          append('### Trivy スキャン結果');
+
+          if (!fs.existsSync(sarifPath)) {
+            append('Trivy の結果ファイルが見つかりませんでした。`Run Trivy Vulnerability Scanner` ステップのログを確認してください。');
+            append();
+            process.exit(0);
+          }
+
+          const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf-8'));
+          const results = sarif?.runs?.[0]?.results ?? [];
+          append(`検出数: **${results.length}**`);
+          append();
+
+          const severityCounts = {};
+          const levelCounts = {};
+
+          for (const item of results) {
+            const severityRaw = item?.properties?.severity || item?.properties?.securitySeverity || 'UNKNOWN';
+            const severityKey = String(severityRaw).toUpperCase();
+            severityCounts[severityKey] = (severityCounts[severityKey] || 0) + 1;
+
+            const levelRaw = item?.level || 'none';
+            const levelKey = levelRaw.toLowerCase();
+            levelCounts[levelKey] = (levelCounts[levelKey] || 0) + 1;
+          }
+
+          if (Object.keys(severityCounts).length) {
+            append('| Severity | Count |');
+            append('| --- | --- |');
+            for (const [key, value] of Object.entries(severityCounts)) {
+              append(`| ${key} | ${value} |`);
+            }
+            append();
+          }
+
+          if (Object.keys(levelCounts).length) {
+            append('| Level | Count |');
+            append('| --- | --- |');
+            for (const [key, value] of Object.entries(levelCounts)) {
+              append(`| ${key} | ${value} |`);
+            }
+            append();
+          }
+
+          append('詳細な一覧は Security タブの Container Scanning レポートを参照してください。');
+          append();
+          EOF
 
   build-push:
     name: Build and Push to ACR
