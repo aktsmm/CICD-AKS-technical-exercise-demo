@@ -34,6 +34,18 @@ param enableStoragePublicAccessAlert bool = true
 @description('アラート通知に利用する既存アクショングループのリソース ID。通知が不要な場合は空文字のままとしてください。')
 param storagePublicAccessActionGroupId string = ''
 
+@description('Microsoft Defender for Cloud の連続エクスポートを有効化する場合に true。')
+param enableDefenderContinuousExport bool = false
+
+@description('連続エクスポート構成のポリシー割り当て名。再デプロイ時に同じ値を利用して整合性を保ちます。')
+param defenderContinuousExportAssignmentName string = 'asc-cont-export-${environment}'
+
+@description('連続エクスポートで利用するリソースグループ名。既存のインフラリソースグループを流用する場合はその名称を指定します。')
+param defenderContinuousExportResourceGroupName string = resourceGroupName
+
+@description('連続エクスポート用リソースグループのリージョン。')
+param defenderContinuousExportResourceGroupLocation string = location
+
 var defenderPlanNames = [
   'VirtualMachines'
   'AppServices'
@@ -236,6 +248,16 @@ module storageAlerts 'modules/alerts-storage.bicep' = if (enableStoragePublicAcc
   params: {
     environment: environment
     actionGroupResourceId: storagePublicAccessActionGroupId
+  }
+}
+
+module defenderContinuousExport 'modules/defender-continuous-export.bicep' = if (enableDefenderContinuousExport) {
+  name: 'defender-cont-export-${deploymentTimestamp}'
+  params: {
+    assignmentName: defenderContinuousExportAssignmentName
+    resourceGroupName: defenderContinuousExportResourceGroupName
+    resourceGroupLocation: defenderContinuousExportResourceGroupLocation
+    workspaceResourceId: monitoring.outputs.workspaceId
   }
 }
 
