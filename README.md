@@ -251,7 +251,7 @@ Push / Pull Request / workflow_dispatch
   |
   +--> 2-1. Build and Deploy Application (.github/workflows/02-1.app-deploy.yml)
   |         |
-  |         +--> quality-check: `npm test` で lint とユニットテストを実行 (現状は `__tests__/health.test.js` のみなので主要ルートの追加テストを検討)
+  |         +--> quality-check: `npm test -- --json` で lint とユニットテストを実行し、Step Summary に合否一覧を出力 (現状は `__tests__/health.test.js` と `__tests__/routes.test.js` をカバー)
   |         +--> codeql-analysis: JavaScript 向け CodeQL で静的解析 (continue-on-error=true で学習用途に最適化)
   |         +--> scan-container: Trivy がコンテナイメージをスキャンし SARIF を Security タブへ送信
   |         +--> build-push: ACR へ `sha` と `latest` タグを push、AKS と MongoDB の情報を取得
