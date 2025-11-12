@@ -63,7 +63,7 @@ jobs:
                   ./Scripts/Build-CustomMcsb.ps1 -OutputPath ./infra/policies/mcsb-v2-pruned.json
 
             - name: Azure Login
-              uses: azure/login@v1
+              uses: azure/login@v2
               with:
                   creds: ${{ secrets.AZURE_CREDENTIALS }}
 
