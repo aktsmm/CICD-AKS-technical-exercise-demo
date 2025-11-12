@@ -23,7 +23,6 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
         {
           type: 1
           content: {
-            json: '## Security Monitoring Dashboard\n\nこのワークブックは、Azure Activity Log の運用・統制イベントと Microsoft Defender for Cloud のリスクをまとめて把握するためのセキュリティ中枢ビューです。\n\n📊 **現在表示中のデータ**: Azure Activity Log、Azure Resource Graph\n⏳ **データ収集待ち**: Microsoft Defender for Cloud (24-48時間後に表示)\n\n💡 **フィルター機能**: 上部のフィルターで時間範囲、重大度、カテゴリを変更できます'
           }
           name: 'text-header'
         }
@@ -38,6 +37,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
                 name: 'TimeRange'
                 label: '📅 時間範囲'
                 type: 4
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryRaw = "{ActivityCategory}";\n// Normalize workbook multi-select output (e.g., "Administrative","Security") to a clean dynamic array.\nlet categories = iif(\n    isempty(categoryRaw),\n    dynamic(["Administrative", "Security"]),\n    split(replace_regex(categoryRaw, "[^\\w,]", ""), ",")\n);\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20'
                 isRequired: true
                 value: {
                   durationMs: 604800000
@@ -88,7 +88,6 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
                 isRequired: false
                 multiSelect: true
                 quote: '"'
-                delimiter: ','
                 typeSettings: {
                   additionalResourceOptions: []
                   showDefault: false
@@ -103,6 +102,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
                 type: 2
                 isRequired: false
                 multiSelect: true
+                      query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryRaw = "{ActivityCategory}";\nlet categories = iif(\n    isempty(categoryRaw),\n    dynamic(["Administrative", "Security", "Policy"]),\n    split(replace_regex(categoryRaw, "[^\\w,]", ""), ",")\n);\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| extend CallerDisplay = coalesce(Caller, CallerIpAddress, "Unknown")\n| summarize Operations = count(), DistinctOperations = dcount(OperationNameValue), DistinctResources = dcount(ResourceId) by CallerDisplay\n| order by Operations desc\n| take 10'
                 quote: '"'
                 delimiter: ','
                 jsonData: '[{"value":"Administrative","label":"Administrative","selected":true},{"value":"Security","label":"Security","selected":true},{"value":"Policy","label":"Policy","selected":false},{"value":"Alert","label":"Alert","selected":false}]'
@@ -125,7 +125,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryRaw = "{ActivityCategory}";\nlet categories = iif(isempty(categoryRaw), dynamic(["Administrative", "Security"]), parse_json(strcat("[", categoryRaw, "]")));\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20'
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryRaw = "{ActivityCategory}";\n// Normalize workbook multi-select output (e.g., "Administrative","Security") to a clean dynamic array.\nlet categories = iif(\n    isempty(categoryRaw),\n    dynamic(["Administrative", "Security"]),\n    split(replace_regex(categoryRaw, "[^\\w,]", ""), ",")\n);\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20'
             size: 0
             title: '監査ログ (Administrative & Security)'
             timeContext: {
@@ -152,7 +152,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryRaw = "{ActivityCategory}";\nlet categories = iif(isempty(categoryRaw), dynamic(["Administrative", "Security", "Policy"]), parse_json(strcat("[", categoryRaw, "]")));\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| extend CallerDisplay = coalesce(Caller, CallerIpAddress, "Unknown")\n| summarize Operations = count(), DistinctOperations = dcount(OperationNameValue), DistinctResources = dcount(ResourceId) by CallerDisplay\n| order by Operations desc\n| take 10'
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryRaw = "{ActivityCategory}";\nlet categories = iif(\n    isempty(categoryRaw),\n    dynamic(["Administrative", "Security", "Policy"]),\n    split(replace_regex(categoryRaw, "[^\\w,]", ""), ",")\n);\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| extend CallerDisplay = coalesce(Caller, CallerIpAddress, "Unknown")\n| summarize Operations = count(), DistinctOperations = dcount(OperationNameValue), DistinctResources = dcount(ResourceId) by CallerDisplay\n| order by Operations desc\n| take 10'
             size: 0
             title: 'リソース操作数上位ユーザー'
             timeContext: {
@@ -333,7 +333,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet severityRaw = "{AlertSeverity}";\nlet severities = iif(isempty(severityRaw), dynamic(["High", "Medium", "Low", "Informational"]), parse_json(strcat("[", severityRaw, "]")));\nlet AlertData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(severities, AlertSeverity)\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated) by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります", AlertName = "", AlertSeverity = "", ProviderName = "", AlertCount = 0, LatestAlert = datetime(null) | where not(HasData))\n| project-away Message'
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet severityRaw = "{AlertSeverity}";\n// Normalize workbook multi-select output (e.g., "High","Medium") to a clean dynamic array.\nlet severities = iif(\n    isempty(severityRaw),\n    dynamic(["High", "Medium", "Low", "Informational"]),\n    split(replace_regex(severityRaw, "[^\\w,]", ""), ",")\n);\nlet AlertData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(severities, AlertSeverity)\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated) by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります", AlertName = "", AlertSeverity = "", ProviderName = "", AlertCount = 0, LatestAlert = datetime(null) | where not(HasData))\n| project-away Message'
             size: 0
             title: 'Defender アラート (フィルター適用済)'
             timeContext: {
@@ -380,7 +380,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet severityRaw = "{AlertSeverity}";\nlet severities = iif(isempty(severityRaw), dynamic(["High", "Medium", "Low", "Informational"]), parse_json(strcat("[", severityRaw, "]")));\nlet DensityData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(severities, AlertSeverity)\n| extend ResourceGroup = tostring(split(ResourceId, "/")[4])\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet severityRaw = "{AlertSeverity}";\nlet severities = iif(\n    isempty(severityRaw),\n    dynamic(["High", "Medium", "Low", "Informational"]),\n    split(replace_regex(severityRaw, "[^\\w,]", ""), ",")\n);\nlet DensityData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(severities, AlertSeverity)\n| extend ResourceGroup = tostring(split(ResourceId, "/")[4])\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
             size: 0
             title: 'Defender アラート密度 (リソースグループ別)'
             timeContext: {
