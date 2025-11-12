@@ -127,7 +127,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'AzureActivity\n| where TimeGenerated {TimeRange}\n| where CategoryValue in ({ActivityCategory})\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20'
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryCsv = "{ActivityCategory}";\nlet categories = iif(categoryCsv == "", dynamic(["Administrative", "Security"]), parse_csv(categoryCsv));\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where CategoryValue in (categories)\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20'
             size: 0
             title: '監査ログ (Administrative & Security)'
             timeContext: {
@@ -154,7 +154,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'AzureActivity\n| where TimeGenerated {TimeRange}\n| where CategoryValue in ({ActivityCategory})\n| extend CallerDisplay = coalesce(Caller, CallerIpAddress, "Unknown")\n| summarize Operations = count(), DistinctOperations = dcount(OperationNameValue), DistinctResources = dcount(ResourceId) by CallerDisplay\n| order by Operations desc\n| take 10'
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryCsv = "{ActivityCategory}";\nlet categories = iif(categoryCsv == "", dynamic(["Administrative", "Security", "Policy"]), parse_csv(categoryCsv));\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where CategoryValue in (categories)\n| extend CallerDisplay = coalesce(Caller, CallerIpAddress, "Unknown")\n| summarize Operations = count(), DistinctOperations = dcount(OperationNameValue), DistinctResources = dcount(ResourceId) by CallerDisplay\n| order by Operations desc\n| take 10'
             size: 0
             title: 'リソース操作数上位ユーザー'
             timeContext: {
@@ -335,7 +335,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let AlertData = SecurityAlert\n| where TimeGenerated {TimeRange}\n| where AlertSeverity in ({AlertSeverity}) or isempty("{AlertSeverity}")\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated) by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります", AlertName = "", AlertSeverity = "", ProviderName = "", AlertCount = 0, LatestAlert = datetime(null) | where not(HasData))\n| project-away Message'
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet severityCsv = "{AlertSeverity}";\nlet severities = iif(severityCsv == "", dynamic(["High", "Medium", "Low", "Informational"]), parse_csv(severityCsv));\nlet AlertData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where array_length(severities) == 0 or AlertSeverity in (severities)\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated) by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります", AlertName = "", AlertSeverity = "", ProviderName = "", AlertCount = 0, LatestAlert = datetime(null) | where not(HasData))\n| project-away Message'
             size: 0
             title: 'Defender アラート (フィルター適用済)'
             timeContext: {
@@ -382,7 +382,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let DensityData = SecurityAlert\n| where TimeGenerated {TimeRange}\n| where AlertSeverity in ({AlertSeverity}) or isempty("{AlertSeverity}")\n| extend ResourceGroup = tostring(split(ResourceId, "/")[4])\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
+            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet severityCsv = "{AlertSeverity}";\nlet severities = iif(severityCsv == "", dynamic(["High", "Medium", "Low", "Informational"]), parse_csv(severityCsv));\nlet DensityData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where array_length(severities) == 0 or AlertSeverity in (severities)\n| extend ResourceGroup = tostring(split(ResourceId, "/")[4])\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
             size: 0
             title: 'Defender アラート密度 (リソースグループ別)'
             timeContext: {
