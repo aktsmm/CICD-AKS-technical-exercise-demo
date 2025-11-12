@@ -141,9 +141,10 @@ jobs:
           node <<'EOF'
           const fs = require('fs');
           const path = require('path');
+          const zlib = require('zlib');
 
           const summaryFile = process.env.GITHUB_STEP_SUMMARY;
-          const sarifPath = path.join(process.cwd(), 'codeql-results', 'javascript.sarif');
+          const workspace = process.cwd();
 
           const append = (line = '') => {
             fs.appendFileSync(summaryFile, `${line}\n`);
@@ -152,14 +153,98 @@ jobs:
           append('### CodeQL 解析結果');
 
           if (!fs.existsSync(sarifPath)) {
+          const preferredFiles = [
+            path.join(workspace, 'codeql-results', 'javascript.sarif'),
+            path.join(workspace, 'codeql-results', 'codeql.sarif'),
+            path.join(workspace, 'codeql-results.sarif'),
+          ];
+
+          const preferredDirs = [
+            path.join(workspace, 'codeql-results'),
+            path.join(workspace, 'sarif-results'),
+            path.join(workspace, 'results'),
+            path.join(process.env.RUNNER_TEMP || '', 'codeql_databases'),
+          ].filter(Boolean);
+
+          const skipDirNames = new Set(['.git', '.github', 'node_modules', 'rendered']);
+          const visited = new Set();
+
+          const findSarifFile = () => {
+            for (const candidate of preferredFiles) {
+              if (candidate && fs.existsSync(candidate)) {
+                return candidate;
+              }
+              if (candidate && candidate.endsWith('.sarif')) {
+                const gzCandidate = `${candidate}.gz`;
+                if (fs.existsSync(gzCandidate)) {
+                  return gzCandidate;
+                }
+              }
+            }
+
+            const queue = [...preferredDirs];
+            const maxDepth = 5;
+            const dirsWithDepth = queue.map((dir) => ({ dir, depth: 0 }));
+
+            while (dirsWithDepth.length) {
+              const { dir, depth } = dirsWithDepth.shift();
+              if (!dir || visited.has(dir)) continue;
+              visited.add(dir);
+
+              let entries = [];
+              try {
+                entries = fs.readdirSync(dir, { withFileTypes: true });
+              } catch (error) {
+                continue;
+              }
+
+              for (const entry of entries) {
+                const entryPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  if (depth < maxDepth && !skipDirNames.has(entry.name)) {
+                    dirsWithDepth.push({ dir: entryPath, depth: depth + 1 });
+                  }
+                  continue;
+                }
+
+                if (entry.name.endsWith('.sarif') || entry.name.endsWith('.sarif.gz')) {
+                  return entryPath;
+                }
+              }
+            }
+
+            return null;
+          };
+
+          const sarifFile = findSarifFile();
+
+          if (!sarifFile) {
             append('解析結果ファイルが見つかりませんでした。`Analyze` ステップのログを確認してください。');
             append();
             process.exit(0);
           }
 
-          const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf-8'));
-          const results = sarif?.runs?.[0]?.results ?? [];
+          const loadSarif = (file) => {
+            let buffer = fs.readFileSync(file);
+            if (file.endsWith('.gz')) {
+              buffer = zlib.gunzipSync(buffer);
+            }
+            return JSON.parse(buffer.toString('utf-8'));
+          };
 
+          let sarif;
+          try {
+            sarif = loadSarif(sarifFile);
+          } catch (error) {
+            append(`SARIF の読み込みに失敗しました: ${error.message}`);
+            append();
+            process.exit(0);
+          }
+
+          append(`使用ファイル: \`${path.relative(workspace, sarifFile) || sarifFile}\``);
+          append();
+
+          const results = sarif?.runs?.[0]?.results ?? [];
           append(`検出数: **${results.length}**`);
           append();
 
