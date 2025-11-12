@@ -1,5 +1,5 @@
 {
-  "name": "wiz-guestbook",
+  "name": "guestbook",
   "version": "1.0.0",
   "description": "CICD-AKS-Technical Exercise - Guestbook App",
   "main": "app.js",
