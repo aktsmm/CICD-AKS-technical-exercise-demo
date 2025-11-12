@@ -293,7 +293,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let DensityData = SecurityAlert\n| where TimeGenerated > ago(7d)\n| extend ResourceGroup = split(_ResourceId, "/")[4]\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by tostring(ResourceGroup)\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 過去7日間にアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
+            query: 'let DensityData = SecurityAlert\n| where TimeGenerated > ago(7d)\n| extend ResourceGroup = tostring(split(ResourceId, "/")[4])\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 過去7日間にアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
             size: 0
             title: 'Defender アラート密度 (リソースグループ別)'
             timeContext: {
