@@ -111,9 +111,40 @@ sudo /usr/local/bin/mongodb-backup.sh
 ```
 
 - 運用ヒント
+
   - Blob Storage 側では VM の Managed Identity に `Storage Blob Data Contributor` を割り当てるため、`modules/vm-storage-role.bicep` のカスタマイズで運用環境に合わせたスコープ調整ができます。
   - バックアップサイズや失敗率を監視に取り込む場合、`/var/log/mongodb-backup.log` を Azure Monitor Agent で収集し、失敗キーワードでアラート化するのが実践的です。
   - `az storage blob upload --auth-mode login` による Azure AD 認証フローの詳細は [ストレージへの Azure AD 認証ガイド](https://learn.microsoft.com/ja-jp/azure/storage/blobs/authorize-access-azure-active-directory) に記載されています。Managed Identity でも同じフローでトークンを取得できるため、シークレットレス運用を保ちながらセキュリティを確保できます。 (#microsoft.docs.mcp)
+
+  ### バックアップログと公開 URL の確認手順
+
+  1. MongoDB VM へ SSH 接続し、直近のバックアップログを確認します。
+
+     ```bash
+     # 直近20行を確認して成否と公開URLを把握
+     sudo tail -n 20 /var/log/mongodb-backup.log
+     ```
+
+     ログには `URL:` 行が出力され、公開コンテナに保存されたアーカイブ名とサイズが記録されます。評価時はこの行をスクリーンショット化すると証跡提出がスムーズです。
+
+  2. Azure CLI で最新バックアップと公開 URL を一覧します。
+
+     ```bash
+     # 環境パラメータに応じたストレージアカウント名を指定
+     STORAGE_ACCOUNT=$(az deployment sub show \
+       --name cicd-aks-main \
+       --query "properties.outputs.storageAccountName.value" -o tsv)
+
+     az storage blob list \
+       --account-name "$STORAGE_ACCOUNT" \
+       --container-name backups \
+       --auth-mode login \
+       --query "[].{name:name,url:url}" -o table
+     ```
+
+     `storageAccountName` は Bicep デプロイの出力 (`stwiz<environment><hash>` 形式) に一致します。`az storage blob list` の詳細は [公式ドキュメント](https://learn.microsoft.com/ja-jp/cli/azure/storage/blob#az-storage-blob-list) を参照してください。 (#microsoft.docs.mcp)
+
+  3. 公開 URL は `https://<storageAccount>.blob.core.windows.net/backups/<ファイル名>` 形式です。必要に応じて `curl -O` でダウンロード検証し、レビュー資料に結果を添付してください。
 
 ## システムアーキテクチャ
 

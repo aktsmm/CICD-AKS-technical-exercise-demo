@@ -226,7 +226,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let NsgRules = resources\n| where type =~ "microsoft.network/networksecuritygroups/securityrules"\n| extend access = tostring(properties.access), direction = tostring(properties.direction), source = tostring(properties.sourceAddressPrefix)\n| where access == "Allow" and direction == "Inbound"\n| where source in ("*", "0.0.0.0/0", "Internet")\n| extend NsgId = tostring(split(id, "/securityRules/")[0])\n| project SubscriptionId = subscriptionId, ResourceGroup = resourceGroup, NsgId, RuleName = name, Priority = tostring(properties.priority), DestinationPort = tostring(properties.destinationPortRange), Protocol = tostring(properties.protocol), SourcePrefix = source\n| order by toint(Priority) asc nulls last;\nlet Summary = NsgRules | summarize Count = count();\nNsgRules\n| extend Note = ""\n| take 50\n| union (Summary | where Count == 0 | project SubscriptionId = "", ResourceGroup = "", NsgId = "", RuleName = "", Priority = "", DestinationPort = "", Protocol = "", SourcePrefix = "", Note = "✅ インターネットからの直接アクセスを許可するNSGルールは検出されませんでした")'
+            query: 'Resources\n| where type =~ "microsoft.network/networksecuritygroups"\n| extend securityRules = properties.securityRules\n| mv-expand securityRules\n| extend access = tostring(securityRules.properties.access), direction = tostring(securityRules.properties.direction)\n| where access == "Allow" and direction == "Inbound"\n| extend singlePrefix = tostring(securityRules.properties.sourceAddressPrefix)\n| extend prefixArray = todynamic(securityRules.properties.sourceAddressPrefixes)\n| extend normalizedPrefixes = iif(isnotempty(prefixArray), prefixArray, dynamic([singlePrefix]))\n| mv-expand normalizedPrefixes to typeof(string)\n| where tolower(normalizedPrefixes) in ("*", "0.0.0.0/0", "internet")\n| extend Priority = toint(securityRules.properties.priority)\n| project SubscriptionId = subscriptionId, ResourceGroup = resourceGroup, NsgName = name, RuleName = tostring(securityRules.name), Priority, DestinationPort = tostring(securityRules.properties.destinationPortRange), Protocol = tostring(securityRules.properties.protocol), SourcePrefix = tostring(normalizedPrefixes)\n| order by Priority asc nulls last, NsgName asc'
             size: 0
             title: '外部許可 NSG ルール (最新状態)'
             queryType: 1
@@ -246,19 +246,19 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let Alerts = union isfuzzy=true (\n  SecurityAlert\n  | where TimeGenerated > ago(7d)\n  | summarize Count = count() by AlertName, AlertSeverity, ProductName\n  | order by Count desc,\n  datatable(AlertName:string, AlertSeverity:string, ProductName:string, Count:long)[]\n);\nlet HasAlerts = toscalar(Alerts | where isnotempty(AlertName) | count) > 0;\nAlerts\n| where isnotempty(AlertName)\n| union (datatable(AlertName:string, AlertSeverity:string, ProductName:string, Count:long)["⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間でアラートデータが表示されます", "", "", 0] | where not(HasAlerts))'
+            query: 'SecurityResources\n| where type =~ "microsoft.security/locations/alerts"\n| extend AlertTime = todatetime(properties.alertCreationTimeUtc)\n| where AlertTime >= ago(7d)\n| extend AlertName = tostring(properties.alertDisplayName), Severity = tostring(properties.severity), Provider = tostring(properties.alertType)\n| summarize AlertCount = count(), LatestAlert = max(AlertTime) by AlertName, Severity, Provider\n| order by AlertCount desc, LatestAlert desc'
             size: 0
             title: '過去7日間の Defender アラート'
             timeContext: {
               durationMs: 604800000
             }
-            queryType: 0
-            resourceType: 'microsoft.operationalinsights/workspaces'
+            queryType: 1
+            resourceType: 'microsoft.resourcegraph/resources'
             visualization: 'table'
             gridSettings: {
               formatters: [
                 {
-                  columnMatch: 'AlertSeverity'
+                  columnMatch: 'Severity'
                   formatter: 18
                   formatOptions: {
                     thresholdsOptions: 'icons'
@@ -293,14 +293,14 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let AlertDensity = union isfuzzy=true (\n  SecurityAlert\n  | where TimeGenerated > ago(7d)\n  | summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n  | order by Alerts desc\n  | take 10,\n  datatable(ResourceGroup:string, Alerts:long, HighSeverity:long)[]\n);\nlet HasData = toscalar(AlertDensity | where isnotempty(ResourceGroup) | count) > 0;\nAlertDensity\n| where isnotempty(ResourceGroup)\n| union (datatable(ResourceGroup:string, Alerts:long, HighSeverity:long)["⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間でアラートデータが表示されます", 0, 0] | where not(HasData))'
+            query: 'SecurityResources\n| where type =~ "microsoft.security/locations/alerts"\n| extend AlertTime = todatetime(properties.alertCreationTimeUtc)\n| where AlertTime >= ago(7d)\n| extend Severity = tostring(properties.severity), ResourceGroup = tostring(split(id, "/")[4])\n| summarize Alerts = count(), HighSeverity = countif(Severity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10'
             size: 0
             title: 'Defender アラート密度 (リソースグループ別)'
             timeContext: {
               durationMs: 604800000
             }
-            queryType: 0
-            resourceType: 'microsoft.operationalinsights/workspaces'
+            queryType: 1
+            resourceType: 'microsoft.resourcegraph/resources'
             visualization: 'table'
             gridSettings: {
               formatters: [
@@ -320,14 +320,14 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let Recommendations = union isfuzzy=true (\n  SecurityRecommendation\n  | where TimeGenerated > ago(1d)\n  | summarize arg_max(TimeGenerated, *) by RecommendationName\n  | summarize Count = count() by RecommendationSeverity\n  | order by Count desc,\n  datatable(RecommendationSeverity:string, Count:long)[]\n);\nlet HasData = toscalar(Recommendations | where isnotempty(RecommendationSeverity) | count) > 0;\nRecommendations\n| where isnotempty(RecommendationSeverity)\n| union (datatable(RecommendationSeverity:string, Count:long)["⏳ Defender for Cloud データ収集中... Log Analytics Workspace接続後、24-48時間で推奨事項データが表示されます", 0] | where not(HasData))'
+            query: 'SecurityResources\n| where type == "microsoft.security/assessments"\n| extend RecommendationSeverity = tostring(properties.metadata.severity)\n| summarize Count = count() by RecommendationSeverity\n| order by Count desc'
             size: 0
             title: 'セキュリティ推奨事項 (重要度別)'
             timeContext: {
               durationMs: 86400000
             }
-            queryType: 0
-            resourceType: 'microsoft.operationalinsights/workspaces'
+            queryType: 1
+            resourceType: 'microsoft.resourcegraph/resources'
             visualization: 'piechart'
           }
           name: 'query-recommendations'
