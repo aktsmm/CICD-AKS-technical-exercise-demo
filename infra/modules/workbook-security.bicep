@@ -37,7 +37,6 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
                 name: 'TimeRange'
                 label: '📅 時間範囲'
                 type: 4
-            query: 'let startTime = todatetime("{TimeRange:start}");\nlet endTime = todatetime("{TimeRange:end}");\nlet categoryRaw = "{ActivityCategory}";\n// Normalize workbook multi-select output (e.g., "Administrative","Security") to a clean dynamic array.\nlet categories = iif(\n    isempty(categoryRaw),\n    dynamic(["Administrative", "Security"]),\n    split(replace_regex(categoryRaw, "[^\\w,]", ""), ",")\n);\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20'
                 isRequired: true
                 value: {
                   durationMs: 604800000
@@ -93,6 +92,12 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
                   showDefault: false
                 }
                 jsonData: '[{"value":"High","label":"High","selected":true},{"value":"Medium","label":"Medium","selected":true},{"value":"Low","label":"Low","selected":true},{"value":"Informational","label":"Informational","selected":true}]'
+                value: [
+                  'High'
+                  'Medium'
+                  'Low'
+                  'Informational'
+                ]
               }
               {
                 id: 'category-param'
@@ -106,6 +111,10 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
                 quote: '"'
                 delimiter: ','
                 jsonData: '[{"value":"Administrative","label":"Administrative","selected":true},{"value":"Security","label":"Security","selected":true},{"value":"Policy","label":"Policy","selected":false},{"value":"Alert","label":"Alert","selected":false}]'
+                value: [
+                  'Administrative'
+                  'Security'
+                ]
               }
             ]
             style: 'above'
