@@ -28,6 +28,12 @@ param existingVmContributorRoleAssignmentName string = ''
 @description('デプロイタイムスタンプ!! (ユニークなデプロイ名生成)')
 param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
 
+@description('Storage Account のパブリックアクセス有効化を検知するアクティビティログアラートをデプロイする場合に true。')
+param enableStoragePublicAccessAlert bool = true
+
+@description('アラート通知に利用する既存アクショングループのリソース ID。通知が不要な場合は空文字のままとしてください。')
+param storagePublicAccessActionGroupId string = ''
+
 var defenderPlanNames = [
   'VirtualMachines'
   'AppServices'
@@ -221,6 +227,15 @@ module diagnostics 'modules/diagnostics.bicep' = {
     vmName: mongoVM.outputs.vmName
     nsgName: mongoVM.outputs.nsgName
     vnetName: networking.outputs.vnetName
+  }
+}
+
+module storageAlerts 'modules/alerts-storage.bicep' = if (enableStoragePublicAccessAlert) {
+  scope: rg
+  name: 'alerts-storage-${deploymentTimestamp}'
+  params: {
+    environment: environment
+    actionGroupResourceId: storagePublicAccessActionGroupId
   }
 }
 
