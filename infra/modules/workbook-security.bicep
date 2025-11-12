@@ -23,9 +23,98 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
         {
           type: 1
           content: {
-            json: '## Security Monitoring Dashboard\n\nこのワークブックは、Azure Activity Log の運用・統制イベントと Microsoft Defender for Cloud のリスクをまとめて把握するためのセキュリティ中枢ビューです。\n\n📊 **現在表示中のデータ**: Azure Activity Log、Azure Resource Graph\n⏳ **データ収集待ち**: Microsoft Defender for Cloud (24-48時間後に表示)'
+            json: '## Security Monitoring Dashboard\n\nこのワークブックは、Azure Activity Log の運用・統制イベントと Microsoft Defender for Cloud のリスクをまとめて把握するためのセキュリティ中枢ビューです。\n\n📊 **現在表示中のデータ**: Azure Activity Log、Azure Resource Graph\n⏳ **データ収集待ち**: Microsoft Defender for Cloud (24-48時間後に表示)\n\n💡 **フィルター機能**: 上部のフィルターで時間範囲、重大度、カテゴリを変更できます'
           }
           name: 'text-header'
+        }
+        {
+          type: 9
+          content: {
+            version: 'KqlParameterItem/1.0'
+            parameters: [
+              {
+                id: 'timerange-param'
+                version: 'KqlParameterItem/1.0'
+                name: 'TimeRange'
+                label: '📅 時間範囲'
+                type: 4
+                isRequired: true
+                value: {
+                  durationMs: 604800000
+                }
+                typeSettings: {
+                  selectableValues: [
+                    {
+                      durationMs: 3600000
+                      createdTime: '2023-01-01T00:00:00.000Z'
+                      isInitialTime: false
+                      grain: 1
+                      useDashboardTimeRange: false
+                    }
+                    {
+                      durationMs: 86400000
+                      createdTime: '2023-01-01T00:00:00.000Z'
+                      isInitialTime: false
+                      grain: 1
+                      useDashboardTimeRange: false
+                    }
+                    {
+                      durationMs: 604800000
+                      createdTime: '2023-01-01T00:00:00.000Z'
+                      isInitialTime: false
+                      grain: 1
+                      useDashboardTimeRange: false
+                    }
+                    {
+                      durationMs: 2592000000
+                      createdTime: '2023-01-01T00:00:00.000Z'
+                      isInitialTime: false
+                      grain: 1
+                      useDashboardTimeRange: false
+                    }
+                  ]
+                  allowCustom: true
+                }
+                timeContext: {
+                  durationMs: 86400000
+                }
+              }
+              {
+                id: 'severity-param'
+                version: 'KqlParameterItem/1.0'
+                name: 'AlertSeverity'
+                label: '🚨 重大度フィルター'
+                type: 2
+                isRequired: false
+                multiSelect: true
+                quote: '\''
+                delimiter: ','
+                typeSettings: {
+                  additionalResourceOptions: []
+                  showDefault: false
+                }
+                jsonData: '["High","Medium","Low","Informational"]'
+                defaultValue: 'High,Medium,Low,Informational'
+              }
+              {
+                id: 'category-param'
+                version: 'KqlParameterItem/1.0'
+                name: 'ActivityCategory'
+                label: '📂 Activity Log カテゴリ'
+                type: 2
+                isRequired: false
+                multiSelect: true
+                quote: '"'
+                delimiter: ','
+                jsonData: '["Administrative","Security","Policy","Alert"]'
+                defaultValue: 'Administrative,Security'
+              }
+            ]
+            style: 'above'
+            queryType: 0
+            resourceType: 'microsoft.operationalinsights/workspaces'
+          }
+          name: 'parameters-filters'
         }
         {
           type: 1
@@ -38,9 +127,9 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'AzureActivity\n| where TimeGenerated > ago(24h)\n| where CategoryValue in ("Administrative", "Security")\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20'
+            query: 'AzureActivity\n| where TimeGenerated {TimeRange}\n| where CategoryValue in ({ActivityCategory})\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20'
             size: 0
-            title: '過去24時間の監査ログ (Administrative & Security)'
+            title: '監査ログ (Administrative & Security)'
             timeContext: {
               durationMs: 86400000
             }
@@ -65,9 +154,9 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'AzureActivity\n| where TimeGenerated > ago(7d)\n| where CategoryValue in ("Administrative", "Security", "Policy")\n| extend CallerDisplay = coalesce(Caller, CallerIpAddress, "Unknown")\n| summarize Operations = count(), DistinctOperations = dcount(OperationNameValue), DistinctResources = dcount(ResourceId) by CallerDisplay\n| order by Operations desc\n| take 10'
+            query: 'AzureActivity\n| where TimeGenerated {TimeRange}\n| where CategoryValue in ({ActivityCategory})\n| extend CallerDisplay = coalesce(Caller, CallerIpAddress, "Unknown")\n| summarize Operations = count(), DistinctOperations = dcount(OperationNameValue), DistinctResources = dcount(ResourceId) by CallerDisplay\n| order by Operations desc\n| take 10'
             size: 0
-            title: 'リソース操作数上位ユーザー (過去7日)'
+            title: 'リソース操作数上位ユーザー'
             timeContext: {
               durationMs: 604800000
             }
@@ -246,9 +335,9 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let AlertData = SecurityAlert\n| where TimeGenerated > ago(7d)\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated) by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (print Message = "ℹ️ 過去7日間にアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります", AlertName = "", AlertSeverity = "", ProviderName = "", AlertCount = 0, LatestAlert = datetime(null) | where not(HasData))\n| project-away Message'
+            query: 'let AlertData = SecurityAlert\n| where TimeGenerated {TimeRange}\n| where AlertSeverity in ({AlertSeverity}) or isempty("{AlertSeverity}")\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated) by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります", AlertName = "", AlertSeverity = "", ProviderName = "", AlertCount = 0, LatestAlert = datetime(null) | where not(HasData))\n| project-away Message'
             size: 0
-            title: '過去7日間の Defender アラート'
+            title: 'Defender アラート (フィルター適用済)'
             timeContext: {
               durationMs: 604800000
             }
@@ -293,7 +382,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'let DensityData = SecurityAlert\n| where TimeGenerated > ago(7d)\n| extend ResourceGroup = tostring(split(ResourceId, "/")[4])\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 過去7日間にアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
+            query: 'let DensityData = SecurityAlert\n| where TimeGenerated {TimeRange}\n| where AlertSeverity in ({AlertSeverity}) or isempty("{AlertSeverity}")\n| extend ResourceGroup = tostring(split(ResourceId, "/")[4])\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 選択した条件でアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
             size: 0
             title: 'Defender アラート密度 (リソースグループ別)'
             timeContext: {
