@@ -15,7 +15,7 @@ var actionGroupEntries = empty(actionGroupResourceId) ? [] : [
 resource storagePublicAccessAlert 'Microsoft.Insights/activityLogAlerts@2020-10-01' = {
   name: 'ala-storage-public-${environment}'
   location: 'global'
-  properties: {
+  properties: union({
     enabled: true
     description: 'Detects when blob public access is enabled on any storage account.'
     scopes: [
@@ -43,9 +43,9 @@ resource storagePublicAccessAlert 'Microsoft.Insights/activityLogAlerts@2020-10-
         }
       ]
     }
-    // アクショングループが指定されていなければ空配列となり通知は発生しない
+  }, empty(actionGroupEntries) ? {} : {
     actions: {
       actionGroups: actionGroupEntries
     }
-  }
+  })
 }
