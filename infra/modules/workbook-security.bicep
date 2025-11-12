@@ -226,7 +226,7 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'Resources\n| where type =~ "microsoft.network/networksecuritygroups"\n| extend securityRules = properties.securityRules\n| mv-expand securityRules\n| extend access = tostring(securityRules.properties.access), direction = tostring(securityRules.properties.direction)\n| where access == "Allow" and direction == "Inbound"\n| extend singlePrefix = tostring(securityRules.properties.sourceAddressPrefix)\n| extend prefixArray = todynamic(securityRules.properties.sourceAddressPrefixes)\n| extend normalizedPrefixes = iif(isnotempty(prefixArray), prefixArray, dynamic([singlePrefix]))\n| mv-expand normalizedPrefixes to typeof(string)\n| where tolower(normalizedPrefixes) in ("*", "0.0.0.0/0", "internet")\n| extend Priority = toint(securityRules.properties.priority)\n| project SubscriptionId = subscriptionId, ResourceGroup = resourceGroup, NsgName = name, RuleName = tostring(securityRules.name), Priority, DestinationPort = tostring(securityRules.properties.destinationPortRange), Protocol = tostring(securityRules.properties.protocol), SourcePrefix = tostring(normalizedPrefixes)\n| order by Priority asc nulls last, NsgName asc'
+            query: 'Resources\n| where type =~ "microsoft.network/networksecuritygroups"\n| extend securityRules = properties.securityRules\n| mv-expand securityRules\n| extend access = tostring(securityRules.properties.access)\n| extend direction = tostring(securityRules.properties.direction)\n| extend sourcePrefix = tostring(securityRules.properties.sourceAddressPrefix)\n| where access == "Allow" and direction == "Inbound"\n| where sourcePrefix in ("*", "0.0.0.0/0", "Internet", "<nw>/0")\n| extend Priority = toint(securityRules.properties.priority)\n| project SubscriptionId = subscriptionId, ResourceGroup = resourceGroup, NsgName = name, RuleName = tostring(securityRules.name), Priority, DestinationPort = tostring(securityRules.properties.destinationPortRange), Protocol = tostring(securityRules.properties.protocol), SourcePrefix = sourcePrefix\n| order by Priority asc nulls last, NsgName asc'
             size: 0
             title: '外部許可 NSG ルール (最新状態)'
             queryType: 1
@@ -246,19 +246,19 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'SecurityResources\n| where type =~ "microsoft.security/locations/alerts"\n| extend AlertTime = todatetime(properties.alertCreationTimeUtc)\n| where AlertTime >= ago(7d)\n| extend AlertName = tostring(properties.alertDisplayName), Severity = tostring(properties.severity), Provider = tostring(properties.alertType)\n| summarize AlertCount = count(), LatestAlert = max(AlertTime) by AlertName, Severity, Provider\n| order by AlertCount desc, LatestAlert desc'
+            query: 'let AlertData = SecurityAlert\n| where TimeGenerated > ago(7d)\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated) by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (print Message = "ℹ️ 過去7日間にアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります", AlertName = "", AlertSeverity = "", ProviderName = "", AlertCount = 0, LatestAlert = datetime(null) | where not(HasData))\n| project-away Message'
             size: 0
             title: '過去7日間の Defender アラート'
             timeContext: {
               durationMs: 604800000
             }
-            queryType: 1
-            resourceType: 'microsoft.resourcegraph/resources'
+            queryType: 0
+            resourceType: 'microsoft.operationalinsights/workspaces'
             visualization: 'table'
             gridSettings: {
               formatters: [
                 {
-                  columnMatch: 'Severity'
+                  columnMatch: 'AlertSeverity'
                   formatter: 18
                   formatOptions: {
                     thresholdsOptions: 'icons'
@@ -293,14 +293,14 @@ resource securityWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           type: 3
           content: {
             version: 'KqlItem/1.0'
-            query: 'SecurityResources\n| where type =~ "microsoft.security/locations/alerts"\n| extend AlertTime = todatetime(properties.alertCreationTimeUtc)\n| where AlertTime >= ago(7d)\n| extend Severity = tostring(properties.severity), ResourceGroup = tostring(split(id, "/")[4])\n| summarize Alerts = count(), HighSeverity = countif(Severity == "High") by ResourceGroup\n| order by Alerts desc\n| take 10'
+            query: 'let DensityData = SecurityAlert\n| where TimeGenerated > ago(7d)\n| extend ResourceGroup = split(_ResourceId, "/")[4]\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == "High") by tostring(ResourceGroup)\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = "ℹ️ 過去7日間にアラートはありません", ResourceGroup = "", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message'
             size: 0
             title: 'Defender アラート密度 (リソースグループ別)'
             timeContext: {
               durationMs: 604800000
             }
-            queryType: 1
-            resourceType: 'microsoft.resourcegraph/resources'
+            queryType: 0
+            resourceType: 'microsoft.operationalinsights/workspaces'
             visualization: 'table'
             gridSettings: {
               formatters: [
