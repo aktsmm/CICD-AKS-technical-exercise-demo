@@ -19,10 +19,17 @@
 |                                                                                                                    |
 |  +---------------------------+      10.0.1.0/24       +-------------------------+                                  |
 |  | AKS Cluster (aks-dev)     |------------------------| Subnet snet-aks          |                                  |
-|  |  - NGINX Ingress (public) |                        +-------------------------+                                  |
+|  |  - NGINX Ingress          |                        +-------------------------+                                  |
 |  |  - guestbook Pods (x2)    |                         | Service: guestbook      |                                  |
 |  |  - Kubernetes Secrets     |                         | Port 80 -> Pod 3000     |                                  |
 |  +---------------------------+                         v                                                             |
+|                    ^                                                                                               |
+|                    | (Service type: LoadBalancer)                                                                  |
+|            +----------------------+                                                                                |
+|            | Azure Public Load    |                                                                                |
+|            | Balancer (fronts     |                                                                                |
+|            | ingress-nginx pods)  |                                                                                |
+|            +----------------------+                                                                                |
 |                                                                                                                    |
 |  +---------------------------+      10.0.2.0/24       +-------------------------+                                  |
 |  | MongoDB VM (MI enabled)   |<----- NSG allow 22 ----| Subnet snet-mongo        |                                  |
@@ -42,7 +49,7 @@
 ```
 
 - AKS は Azure CNI (VNet 統合) を利用し、`snet-aks` に直接 Pod IP を割り当てます。MongoDB VM は別サブネットに隔離し、NSG でアクセス制御を行います。
-- Ingress Controller は Azure Public Load Balancer のグローバル IP を使用しており、公式解説どおりインターネットから直接トラフィックを受ける構成になっています ([Azure Load Balancer の概要](https://learn.microsoft.com/ja-jp/azure/networking/load-balancer-content-delivery/load-balancing-content-delivery-overview))。演習では公開状態を保ったまま、後述の改善案で Internal Load Balancer + WAF への多層防御移行を検討する前提です。
+- Ingress Controller は AKS 上の `Service type: LoadBalancer` としてデプロイされ、Azure Public Load Balancer のグローバル IP 経由で外部公開されています ([Azure Load Balancer の概要](https://learn.microsoft.com/ja-jp/azure/networking/load-balancer-content-delivery/load-balancing-content-delivery-overview))。技術課題の「Ingress + CSP ロードバランサで公開」要件を満たすため、Azure 側で自動割り当てられた Public IP をそのまま利用しています。演習では公開状態を保ちつつ、後述の改善案で Internal Load Balancer + WAF への多層防御移行を検討する前提です。
 - バックアップ用 Storage Account は一部脆弱な設定 (HTTP 許可など) を残しており、セキュリティスキャン教材として活用します。
 - サブスクリプションレベルで Azure Policy を割り当て、Log Analytics へ診断ログを集約することで監査性を高めています。
 
@@ -115,7 +122,7 @@ User Browser
   |
   | HTTPS / HTTP
   v
-NGINX Ingress Load Balancer
+Azure Public Load Balancer (ingress-nginx Service)
   |
   | L7 routing (path /)
   v
@@ -171,7 +178,7 @@ Internet User
   |
   | TCP 80 / 443
   v
-NGINX Ingress LB
+Azure Public Load Balancer (Ingress)
   |
   | TCP 80 (internal)
   v
@@ -190,14 +197,15 @@ MongoDB VM
 Storage Account (Blob)
 ```
 
-| 経路                | プロトコル / ポート  | 備考                                             |
-| ------------------- | -------------------- | ------------------------------------------------ |
-| 利用者 → Ingress    | HTTP/HTTPS : 80, 443 | selfsigned-issuer + `<IP>.nip.io` で自己署名 TLS |
-| Ingress → Service   | HTTP : 80            | Ingress アノテーションで `/` へルーティング      |
-| Service → Pod       | HTTP : 3000          | Liveness / Readiness Probe も同ポート            |
-| Pod → MongoDB VM    | TCP : 27017          | NSG で `10.0.1.0/24` のみ許可                    |
-| 管理者 → MongoDB VM | SSH : 22             | デモ用に 0.0.0.0/0 を許容 (本番では閉鎖推奨)     |
-| VM → Storage        | HTTPS : 443          | Managed Identity + AzCopy によるバックアップ     |
+| 経路                   | プロトコル / ポート  | 備考                                                     |
+| ---------------------- | -------------------- | -------------------------------------------------------- |
+| 利用者 → LoadBalancer  | HTTP/HTTPS : 80, 443 | Azure Public Load Balancer 経由で ingress-nginx に到達   |
+| LoadBalancer → Ingress | HTTP : 80            | `Service type: LoadBalancer` が Azure 側でフロントを構築 |
+| Ingress → Service      | HTTP : 80            | Ingress アノテーションで `/` へルーティング              |
+| Service → Pod          | HTTP : 3000          | Liveness / Readiness Probe も同ポート                    |
+| Pod → MongoDB VM       | TCP : 27017          | NSG で `10.0.1.0/24` のみ許可                            |
+| 管理者 → MongoDB VM    | SSH : 22             | デモ用に 0.0.0.0/0 を許容 (本番では閉鎖推奨)             |
+| VM → Storage           | HTTPS : 443          | Managed Identity + AzCopy によるバックアップ             |
 
 ## CI/CD 構成とデプロイ手順
 

@@ -1,9 +1,7 @@
-氏名: T.Y
-日付: 2025-11-06
-CICD-AKS-Technical Exercise
+Name: Tatsumi Yamamoto
 
 ===================================
-このファイルへのアクセス方法:
+How to Access this:
 ===================================
 
 【方法1】kubectl exec コマンド（コンテナ内部確認）
@@ -17,7 +15,7 @@ $ curl http://<IP>/wizexercise.txt
 
 
 -----------------------------------------------------------
-<Secret Info>
+<Mongo aceess info>
 MONGO_USER="mongoadmin"
 MONGO_PASSWORD="dhs7XVDulERmTGwL"
 -----------------------------------------------------------
