@@ -149,58 +149,43 @@ jobs:
 
             anyReport = true;
             const results = sarif?.runs?.[0]?.results ?? [];
-            append(`検出数: **${results.length}**`);
+            const errorResults = results.filter((item) => (item?.level || 'none').toLowerCase() === 'error');
 
-            if (results.length === 0) {
+            append(`Level=error の検出数: **${errorResults.length}**`);
+
+            if (errorResults.length === 0) {
+              append('Level=error の検出はありませんでした。');
               append();
               continue;
             }
 
             const severityCounts = {};
-            const levelCounts = {};
             const errorDetails = [];
 
-            for (const item of results) {
+            for (const item of errorResults) {
               const severityRaw = item?.properties?.severity || item?.properties?.securitySeverity || 'UNKNOWN';
               const severityKey = String(severityRaw).toUpperCase();
               severityCounts[severityKey] = (severityCounts[severityKey] || 0) + 1;
 
-              const levelRaw = item?.level || 'none';
-              const levelKey = String(levelRaw).toLowerCase();
-              levelCounts[levelKey] = (levelCounts[levelKey] || 0) + 1;
-
-              if (levelKey === 'error') {
-                const ruleId = item?.ruleId || 'Unknown rule';
-                const message = item?.message?.text || item?.message || '詳細メッセージ無し';
-                const location = item?.locations?.[0]?.physicalLocation?.artifactLocation?.uri || '';
-                const trimmedLocation = location ? ` (${location})` : '';
-                errorDetails.push(`- **${severityKey}** ${ruleId}: ${message}${trimmedLocation}`);
-              }
+              const ruleId = item?.ruleId || 'Unknown rule';
+              const message = item?.message?.text || item?.message || '詳細メッセージ無し';
+              const location = item?.locations?.[0]?.physicalLocation?.artifactLocation?.uri || '';
+              const trimmedLocation = location ? ` (${location})` : '';
+              errorDetails.push(`- **${severityKey}** ${ruleId}: ${message}${trimmedLocation}`);
             }
 
-            append('| Severity | Count |');
+            append('| Severity (Level=error) | Count |');
             append('| --- | --- |');
             for (const [key, value] of Object.entries(severityCounts)) {
               append(`| ${key} | ${value} |`);
             }
 
-            if (Object.keys(levelCounts).length) {
-              append();
-              append('| Level | Count |');
-              append('| --- | --- |');
-              for (const [key, value] of Object.entries(levelCounts)) {
-                append(`| ${key} | ${value} |`);
-              }
-            }
-
-            if (errorDetails.length) {
-              append();
-              append('エラー詳細 (最大10件):');
-              const maxItems = 10;
-              errorDetails.slice(0, maxItems).forEach((entry) => append(entry));
-              if (errorDetails.length > maxItems) {
-                append(`...他 ${errorDetails.length - maxItems} 件の error があります。`);
-              }
+            append();
+            append('エラー詳細 (最大10件):');
+            const maxItems = 10;
+            errorDetails.slice(0, maxItems).forEach((entry) => append(entry));
+            if (errorDetails.length > maxItems) {
+              append(`...他 ${errorDetails.length - maxItems} 件の error があります。`);
             }
 
             append();

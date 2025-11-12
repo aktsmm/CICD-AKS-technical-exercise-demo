@@ -263,35 +263,30 @@ jobs:
           append();
 
           const results = sarif?.runs?.[0]?.results ?? [];
-          append(`検出数: **${results.length}**`);
+          const errorResults = results.filter((item) => (item?.level || 'none') === 'error');
+
+          append(`Level=error の検出数: **${errorResults.length}**`);
           append();
+
+          if (errorResults.length === 0) {
+            append('Level=error の検出はありませんでした。詳細は Code Scanning Alerts を参照してください。');
+            append();
+            process.exit(0);
+          }
 
           const severityOrder = ['Critical', 'High', 'Medium', 'Low', 'Other'];
           const severityCounts = Object.fromEntries(severityOrder.map((k) => [k, 0]));
-          const levelOrder = ['error', 'warning', 'note', 'none'];
-          const levelCounts = Object.fromEntries(levelOrder.map((k) => [k, 0]));
 
-          for (const item of results) {
+          for (const item of errorResults) {
             const severityRaw = item?.properties?.securitySeverity || item?.properties?.severity;
             const severityKey = severityOrder.includes(severityRaw) ? severityRaw : 'Other';
             severityCounts[severityKey] += 1;
-
-            const levelRaw = item?.level || 'none';
-            const levelKey = levelOrder.includes(levelRaw) ? levelRaw : 'none';
-            levelCounts[levelKey] += 1;
           }
 
-          append('| Severity | Count |');
+          append('| Severity (Level=error) | Count |');
           append('| --- | --- |');
           for (const key of severityOrder) {
             append(`| ${key} | ${severityCounts[key]} |`);
-          }
-          append();
-
-          append('| Level | Count |');
-          append('| --- | --- |');
-          for (const key of levelOrder) {
-            append(`| ${key} | ${levelCounts[key]} |`);
           }
           append();
 
@@ -354,58 +349,46 @@ jobs:
 
           const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf-8'));
           const results = sarif?.runs?.[0]?.results ?? [];
-          append(`検出数: **${results.length}**`);
+          const errorResults = results.filter((item) => (item?.level || 'none').toLowerCase() === 'error');
+
+          append(`Level=error の検出数: **${errorResults.length}**`);
           append();
 
+          if (errorResults.length === 0) {
+            append('Level=error の検出はありませんでした。詳細は Container Scanning レポートを参照してください。');
+            append();
+            process.exit(0);
+          }
+
           const severityCounts = {};
-          const levelCounts = {};
           const errorDetails = [];
 
-          for (const item of results) {
+          for (const item of errorResults) {
             const severityRaw = item?.properties?.severity || item?.properties?.securitySeverity || 'UNKNOWN';
             const severityKey = String(severityRaw).toUpperCase();
             severityCounts[severityKey] = (severityCounts[severityKey] || 0) + 1;
 
-            const levelRaw = item?.level || 'none';
-            const levelKey = levelRaw.toLowerCase();
-            levelCounts[levelKey] = (levelCounts[levelKey] || 0) + 1;
-
-            if (levelKey === 'error') {
-              const ruleId = item?.ruleId || 'Unknown rule';
-              const message = item?.message?.text || item?.message || '詳細メッセージ無し';
-              const location = item?.locations?.[0]?.physicalLocation?.artifactLocation?.uri || '';
-              const trimmedLocation = location ? ` (${location})` : '';
-              errorDetails.push(`- **${severityKey}** ${ruleId}: ${message}${trimmedLocation}`);
-            }
+            const ruleId = item?.ruleId || 'Unknown rule';
+            const message = item?.message?.text || item?.message || '詳細メッセージ無し';
+            const location = item?.locations?.[0]?.physicalLocation?.artifactLocation?.uri || '';
+            const trimmedLocation = location ? ` (${location})` : '';
+            errorDetails.push(`- **${severityKey}** ${ruleId}: ${message}${trimmedLocation}`);
           }
 
-          if (Object.keys(severityCounts).length) {
-            append('| Severity | Count |');
-            append('| --- | --- |');
-            for (const [key, value] of Object.entries(severityCounts)) {
-              append(`| ${key} | ${value} |`);
-            }
-            append();
+          append('| Severity (Level=error) | Count |');
+          append('| --- | --- |');
+          for (const [key, value] of Object.entries(severityCounts)) {
+            append(`| ${key} | ${value} |`);
           }
+          append();
 
-          if (Object.keys(levelCounts).length) {
-            append('| Level | Count |');
-            append('| --- | --- |');
-            for (const [key, value] of Object.entries(levelCounts)) {
-              append(`| ${key} | ${value} |`);
-            }
-            append();
+          append('エラー詳細 (最大10件):');
+          const maxItems = 10;
+          errorDetails.slice(0, maxItems).forEach((entry) => append(entry));
+          if (errorDetails.length > maxItems) {
+            append(`...他 ${errorDetails.length - maxItems} 件の error があります。`);
           }
-
-          if (errorDetails.length) {
-            append('エラー詳細 (最大10件):');
-            const maxItems = 10;
-            errorDetails.slice(0, maxItems).forEach((entry) => append(entry));
-            if (errorDetails.length > maxItems) {
-              append(`...他 ${errorDetails.length - maxItems} 件の error があります。`);
-            }
-            append();
-          }
+          append();
 
           append('詳細な一覧は Security タブの Container Scanning レポートを参照してください。');
           append();
