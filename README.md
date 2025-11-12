@@ -246,6 +246,7 @@ Push / Pull Request / workflow_dispatch
   +--> 1. Deploy Infrastructure (.github/workflows/01.infra-deploy.yml)
   |      |
   |      +--> Checkov が Bicep をスキャンし SARIF で結果を保存 (IaC 品質)
+  |      +--> Step Summary で Checkov/Trivy の検出件数と重大度別内訳を集計し、Actions 画面から IaC 健全性を即確認
   |      +--> azure/arm-deploy が `infra/main.bicep` を展開し、AKS や MongoDB VM を構築
   |      +--> 生成した AKS 名や MongoDB IP をアーティファクト化して後続ジョブへ連携
   |

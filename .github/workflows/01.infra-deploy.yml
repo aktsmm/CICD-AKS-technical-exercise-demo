@@ -63,6 +63,102 @@ jobs:
         with:
           sarif_file: trivy-config.sarif
 
+      - name: Summarize IaC Scan Findings
+        if: always()
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          const zlib = require('zlib');
+
+          const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+
+          const append = (line = '') => {
+            fs.appendFileSync(summaryFile, `${line}\n`);
+          };
+
+          append('### IaC スキャン結果');
+
+          const reports = [
+            { title: 'Checkov (Bicep)', file: 'checkov-results.sarif' },
+            { title: 'Trivy Config (Bicep)', file: 'trivy-config.sarif' },
+          ];
+
+          const loadSarif = (filePath) => {
+            if (!fs.existsSync(filePath)) {
+              const gzPath = `${filePath}.gz`;
+              if (!fs.existsSync(gzPath)) {
+                return null;
+              }
+              const buffer = zlib.gunzipSync(fs.readFileSync(gzPath));
+              return JSON.parse(buffer.toString('utf-8'));
+            }
+
+            return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          };
+
+          let anyReport = false;
+
+          for (const report of reports) {
+            const sarif = loadSarif(path.join(process.cwd(), report.file));
+
+            append(`#### ${report.title}`);
+
+            if (!sarif) {
+              append('結果ファイルが見つかりませんでした。該当ステップのログを確認してください。');
+              append();
+              continue;
+            }
+
+            anyReport = true;
+            const results = sarif?.runs?.[0]?.results ?? [];
+            append(`検出数: **${results.length}**`);
+
+            if (results.length === 0) {
+              append();
+              continue;
+            }
+
+            const severityCounts = {};
+            const levelCounts = {};
+
+            for (const item of results) {
+              const severityRaw = item?.properties?.severity || item?.properties?.securitySeverity || 'UNKNOWN';
+              const severityKey = String(severityRaw).toUpperCase();
+              severityCounts[severityKey] = (severityCounts[severityKey] || 0) + 1;
+
+              const levelRaw = item?.level || 'none';
+              const levelKey = String(levelRaw).toLowerCase();
+              levelCounts[levelKey] = (levelCounts[levelKey] || 0) + 1;
+            }
+
+            append('| Severity | Count |');
+            append('| --- | --- |');
+            for (const [key, value] of Object.entries(severityCounts)) {
+              append(`| ${key} | ${value} |`);
+            }
+
+            if (Object.keys(levelCounts).length) {
+              append();
+              append('| Level | Count |');
+              append('| --- | --- |');
+              for (const [key, value] of Object.entries(levelCounts)) {
+                append(`| ${key} | ${value} |`);
+              }
+            }
+
+            append();
+          }
+
+          if (!anyReport) {
+            append('いずれの SARIF 結果も確認できませんでした。スキャンステップが正常終了しているか確認してください。');
+            append();
+          } else {
+            append('詳細は Security タブの IaC スキャン結果を参照してください。');
+            append();
+          }
+          EOF
+
   deploy-infra:
     name: Deploy Azure Infrastructure
     runs-on: ubuntu-latest

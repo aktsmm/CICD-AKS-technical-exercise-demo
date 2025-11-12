@@ -151,8 +151,6 @@ jobs:
           };
 
           append('### CodeQL 解析結果');
-
-          if (!fs.existsSync(sarifPath)) {
           const preferredFiles = [
             path.join(workspace, 'codeql-results', 'javascript.sarif'),
             path.join(workspace, 'codeql-results', 'codeql.sarif'),
