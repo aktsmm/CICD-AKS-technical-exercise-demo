@@ -16,6 +16,9 @@
     },
     "grantAutomationPrincipalOwner": {
       "value": false
+    },
+    "enableDefenderContinuousExport": {
+      "value": true
     }
   }
 }

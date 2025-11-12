@@ -35,7 +35,7 @@ param enableStoragePublicAccessAlert bool = true
 param storagePublicAccessActionGroupId string = ''
 
 @description('Microsoft Defender for Cloud の連続エクスポートを有効化する場合に true。')
-param enableDefenderContinuousExport bool = false
+param enableDefenderContinuousExport bool = true
 
 @description('連続エクスポート構成のポリシー割り当て名。再デプロイ時に同じ値を利用して整合性を保ちます。')
 param defenderContinuousExportAssignmentName string = 'asc-cont-export-${environment}'

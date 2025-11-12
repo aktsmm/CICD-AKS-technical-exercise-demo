@@ -342,6 +342,7 @@ jobs:
                 grantAutomationPrincipalOwner=${{ env.GRANT_OWNER_PARAMETER }} \
                 existingStorageRoleAssignmentName=${{ env.EXISTING_STORAGE_ROLE_ASSIGNMENT }} \
                 existingVmContributorRoleAssignmentName=${{ env.EXISTING_VM_ROLE_ASSIGNMENT }} \
+                enableDefenderContinuousExport=true \
               --result-format ResourceIdOnly; then
               echo "✅ What-If analysis completed successfully"
               SUCCESS=true
@@ -380,6 +381,7 @@ jobs:
             grantAutomationPrincipalOwner=${{ env.GRANT_OWNER_PARAMETER }}
             existingStorageRoleAssignmentName=${{ env.EXISTING_STORAGE_ROLE_ASSIGNMENT }}
             existingVmContributorRoleAssignmentName=${{ env.EXISTING_VM_ROLE_ASSIGNMENT }}
+            enableDefenderContinuousExport=true
           deploymentName: infra-deployment-${{ env.LOCATION }}-${{ github.run_number }}
           failOnStdErr: false
 

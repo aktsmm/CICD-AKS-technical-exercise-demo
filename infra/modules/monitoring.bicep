@@ -18,6 +18,21 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   }
 }
 
+// セキュリティセンター連携を有効化し連続エクスポートの受け口を整備
+resource securityCenterSolution 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
+  name: 'SecurityCenterFree(${workspace.name})'
+  location: location
+  plan: {
+    name: 'SecurityCenterFree(${workspace.name})'
+    product: 'OMSGallery/SecurityCenterFree'
+    publisher: 'Microsoft'
+    promotionCode: ''
+  }
+  properties: {
+    workspaceResourceId: workspace.id
+  }
+}
+
 // Note: Diagnostic Settings for Activity Log should be configured at subscription level
 // This can be done separately using Azure CLI or Portal after deployment
 
