@@ -67,6 +67,26 @@ jobs:
 
           const data = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
 
+          const formatDuration = (ms) => {
+            if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) {
+              return '-';
+            }
+
+            if (ms >= 1000) {
+              return `${(ms / 1000).toFixed(2)} s`;
+            }
+
+            if (ms >= 10) {
+              return `${(ms / 1000).toFixed(3)} s`;
+            }
+
+            if (ms > 0) {
+              return `${ms.toFixed(0)} ms`;
+            }
+
+            return '0 ms';
+          };
+
           const totalSuites = data.numTotalTestSuites || 0;
           const passedSuites = data.numPassedTestSuites || 0;
           const failedSuites = data.numFailedTestSuites || 0;
@@ -84,7 +104,7 @@ jobs:
           writeSummary('');
 
           if (Array.isArray(data.testResults) && data.testResults.length > 0) {
-            writeSummary('| スイート | 成功 | 失敗 | スキップ | 実行時間 (s) |');
+            writeSummary('| スイート | 成功 | 失敗 | スキップ | 実行時間 |');
             writeSummary('| --- | --- | --- | --- | --- |');
             for (const suite of data.testResults) {
               const suiteName = path.relative(process.cwd(), suite.name || '');
@@ -93,7 +113,7 @@ jobs:
               const failed = assertions.filter((a) => a.status === 'failed').length;
               const skipped = assertions.filter((a) => a.status === 'pending').length;
               const runtimeMs = suite?.perfStats?.runtime ?? suite?.duration ?? 0;
-              const duration = (runtimeMs / 1000).toFixed(2);
+              const duration = formatDuration(runtimeMs);
               writeSummary(`| ${suiteName} | ${passed} | ${failed} | ${skipped} | ${duration} |`);
             }
             writeSummary('');
@@ -339,6 +359,7 @@ jobs:
 
           const severityCounts = {};
           const levelCounts = {};
+          const errorDetails = [];
 
           for (const item of results) {
             const severityRaw = item?.properties?.severity || item?.properties?.securitySeverity || 'UNKNOWN';
@@ -348,6 +369,14 @@ jobs:
             const levelRaw = item?.level || 'none';
             const levelKey = levelRaw.toLowerCase();
             levelCounts[levelKey] = (levelCounts[levelKey] || 0) + 1;
+
+            if (levelKey === 'error') {
+              const ruleId = item?.ruleId || 'Unknown rule';
+              const message = item?.message?.text || item?.message || '詳細メッセージ無し';
+              const location = item?.locations?.[0]?.physicalLocation?.artifactLocation?.uri || '';
+              const trimmedLocation = location ? ` (${location})` : '';
+              errorDetails.push(`- **${severityKey}** ${ruleId}: ${message}${trimmedLocation}`);
+            }
           }
 
           if (Object.keys(severityCounts).length) {
@@ -364,6 +393,16 @@ jobs:
             append('| --- | --- |');
             for (const [key, value] of Object.entries(levelCounts)) {
               append(`| ${key} | ${value} |`);
+            }
+            append();
+          }
+
+          if (errorDetails.length) {
+            append('エラー詳細 (最大10件):');
+            const maxItems = 10;
+            errorDetails.slice(0, maxItems).forEach((entry) => append(entry));
+            if (errorDetails.length > maxItems) {
+              append(`...他 ${errorDetails.length - maxItems} 件の error があります。`);
             }
             append();
           }
