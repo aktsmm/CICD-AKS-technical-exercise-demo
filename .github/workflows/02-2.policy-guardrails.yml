@@ -30,7 +30,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
         steps:
             - name: Checkout Code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Run Checkov Scan
               uses: bridgecrewio/checkov-action@master
@@ -55,7 +55,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
         steps:
             - name: Checkout Code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Build Custom MCSB Definition
               shell: pwsh

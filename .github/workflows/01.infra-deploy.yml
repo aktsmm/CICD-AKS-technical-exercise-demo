@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run Checkov Scan
         uses: bridgecrewio/checkov-action@master
@@ -206,7 +206,7 @@ jobs:
     needs: scan-iac
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Azure Login (bootstrap RBAC)
         if: ${{ vars.AZURE_GITHUB_PRINCIPAL_ID != '' }}
