@@ -171,16 +171,26 @@ jobs:
           };
 
           append('### CodeQL 解析結果');
+          const envSarifDirRaw = process.env.CODEQL_ACTION_SARIF_RESULTS_OUTPUT_DIR;
+          const resolvedEnvSarifDir = envSarifDirRaw
+            ? path.resolve(workspace, envSarifDirRaw)
+            : null;
+
           const preferredFiles = [
             path.join(workspace, 'codeql-results', 'javascript.sarif'),
             path.join(workspace, 'codeql-results', 'codeql.sarif'),
             path.join(workspace, 'codeql-results.sarif'),
-          ];
+            resolvedEnvSarifDir ? path.join(resolvedEnvSarifDir, 'javascript.sarif') : null,
+            resolvedEnvSarifDir ? path.join(resolvedEnvSarifDir, 'codeql.sarif') : null,
+            resolvedEnvSarifDir ? path.join(resolvedEnvSarifDir, 'results.sarif') : null,
+          ].filter(Boolean);
 
           const preferredDirs = [
             path.join(workspace, 'codeql-results'),
             path.join(workspace, 'sarif-results'),
             path.join(workspace, 'results'),
+            path.resolve(workspace, '..', 'results'),
+            resolvedEnvSarifDir,
             path.join(process.env.RUNNER_TEMP || '', 'codeql_databases'),
           ].filter(Boolean);
 
