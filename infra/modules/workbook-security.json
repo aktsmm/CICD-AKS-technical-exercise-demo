@@ -3,7 +3,9 @@
   "items": [
     {
       "type": 1,
-      "content": {},
+      "content": {
+        "json": ""
+      },
       "name": "text-header"
     },
     {
@@ -64,7 +66,6 @@
             "name": "AlertSeverity",
             "label": "🚨 重大度フィルター",
             "type": 2,
-            "isRequired": false,
             "multiSelect": true,
             "quote": "\"",
             "typeSettings": {
@@ -73,19 +74,6 @@
             },
             "jsonData": "[{\"value\":\"High\",\"label\":\"High\",\"selected\":true},{\"value\":\"Medium\",\"label\":\"Medium\",\"selected\":true},{\"value\":\"Low\",\"label\":\"Low\",\"selected\":true},{\"value\":\"Informational\",\"label\":\"Informational\",\"selected\":true}]",
             "value": ["High", "Medium", "Low", "Informational"]
-          },
-          {
-            "id": "category-param",
-            "version": "KqlParameterItem/1.0",
-            "name": "ActivityCategory",
-            "label": "📂 Activity Log カテゴリ",
-            "type": 2,
-            "isRequired": false,
-            "multiSelect": true,
-            "quote": "\"",
-            "delimiter": ",",
-            "jsonData": "[{\"value\":\"Administrative\",\"label\":\"Administrative\",\"selected\":true},{\"value\":\"Security\",\"label\":\"Security\",\"selected\":true},{\"value\":\"Policy\",\"label\":\"Policy\",\"selected\":false},{\"value\":\"Alert\",\"label\":\"Alert\",\"selected\":false}]",
-            "value": ["Administrative", "Security"]
           }
         ],
         "style": "above",
@@ -105,7 +93,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let startTime = todatetime(\"{TimeRange:start}\");\nlet endTime = todatetime(\"{TimeRange:end}\");\nlet categoryRaw = \"{ActivityCategory}\";\n// Sanitize multi-select parameter payload to avoid stray quoting breaking set_has_element.\nlet categoryClean = replace_string(replace_string(replace_string(replace_string(replace_string(categoryRaw, \"\\\"\", \"\"), \"'\", \"\"), \"[\", \"\"), \"]\", \"\"), \" \", \"\");\nlet categories = iif(\n  isempty(categoryClean),\n  dynamic([\"Administrative\", \"Security\"]),\n  split(categoryClean, \",\")\n);\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| summarize Count = count() by OperationNameValue, CallerIpAddress, CategoryValue\n| order by Count desc\n| take 20",
+        "query": "let startTime = ago(30d);\r\nlet endTime = now();\r\n\r\nAzureActivity\r\n| where TimeGenerated between (startTime .. endTime)\r\n| extend CallerDisplay = coalesce(Caller, \"Unknown\")\r\n| extend Category = case(\r\n    CategoryValue == \"Administrative\", \"Management\",\r\n    CategoryValue == \"Security\", \"Security\",\r\n    CategoryValue == \"Policy\", \"Policy\",\r\n    CategoryValue == \"Recommendation\", \"Recommendation\",\r\n    CategoryValue == \"ServiceHealth\", \"ServiceHealth\",\r\n    \"Other\" // ← デフォルト値（最後に1つだけ）\r\n  )\r\n| summarize OperationCount = count(),\r\n            ResourceCount = dcount(ResourceId),\r\n            LastOperationTime = max(TimeGenerated)\r\n  by Category, OperationNameValue, CallerDisplay, CallerIpAddress\r\n| order by OperationCount desc\r\n| take 20\r\n",
         "size": 0,
         "title": "監査ログ (Administrative & Security)",
         "timeContext": {
@@ -132,7 +120,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let startTime = todatetime(\"{TimeRange:start}\");\nlet endTime = todatetime(\"{TimeRange:end}\");\nlet categoryRaw = \"{ActivityCategory}\";\nlet categoryClean = replace_string(replace_string(replace_string(replace_string(replace_string(categoryRaw, \"\\\"\", \"\"), \"'\", \"\"), \"[\", \"\"), \"]\", \"\"), \" \", \"\");\nlet categories = iif(\n  isempty(categoryClean),\n  dynamic([\"Administrative\", \"Security\", \"Policy\"]),\n  split(categoryClean, \",\")\n);\nAzureActivity\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(categories, CategoryValue)\n| extend CallerDisplay = coalesce(Caller, CallerIpAddress, \"Unknown\")\n| summarize Operations = count(), DistinctOperations = dcount(OperationNameValue), DistinctResources = dcount(ResourceId) by CallerDisplay\n| order by Operations desc\n| take 10",
+        "query": "let startTime = ago(7d);\r\nlet endTime = now();\r\n\r\n// AzureActivity 側：Caller GUIDごとの操作集計\r\nlet Activity = AzureActivity\r\n| where TimeGenerated between (startTime .. endTime)\r\n| where isnotempty(Caller)\r\n| summarize TotalOps = count(), LastOperation = max(TimeGenerated) by Caller;\r\n\r\n// AuditLogs 側：サービスプリンシパルとユーザーの対応を抽出\r\nlet PrincipalNames = AuditLogs\r\n| extend AppId = tostring(InitiatedBy.app.id),\r\n         AppName = tostring(InitiatedBy.app.displayName),\r\n         UserId = tostring(InitiatedBy.user.id),\r\n         UserName = tostring(InitiatedBy.user.userPrincipalName)\r\n| project Caller = case(\r\n    isnotempty(AppId), AppId,\r\n    isnotempty(UserId), UserId,\r\n    \"Unknown\"\r\n  ),\r\n  DisplayName = case(\r\n    isnotempty(AppName), AppName,\r\n    isnotempty(UserName), UserName,\r\n    \"Unknown\"\r\n  )\r\n| distinct Caller, DisplayName;\r\n\r\n// 結合して人間が読める名前に変換\r\nActivity\r\n| join kind=leftouter (PrincipalNames) on Caller\r\n| extend CallerResolved = iif(DisplayName != \"Unknown\", DisplayName, Caller)\r\n| order by TotalOps desc\r\n| project  Caller, TotalOps, LastOperation\r\n| take 10\r\n\r\n",
         "size": 0,
         "title": "リソース操作数上位ユーザー",
         "timeContext": {
@@ -151,7 +139,8 @@
               }
             }
           ]
-        }
+        },
+        "sortBy": []
       },
       "name": "query-top-callers"
     },
@@ -213,20 +202,6 @@
         "visualization": "table"
       },
       "name": "query-public-paas"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "---\n\n## ⏳ データ収集待ちセクション\n\n以下のセクションは **Microsoft Defender for Cloud** および **NSG設定** のデータが必要です。\nLog Analytics Workspace 接続後、24-48時間でデータが表示されます。"
-      },
-      "name": "text-waiting-section"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "### 🚨 セキュリティインシデント対応"
-      },
-      "name": "text-incidents"
     },
     {
       "type": 3,
@@ -313,7 +288,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let startTime = todatetime(\"{TimeRange:start}\");\nlet endTime = todatetime(\"{TimeRange:end}\");\nlet severityRaw = \"{AlertSeverity}\";\nlet severityClean = replace_string(replace_string(replace_string(replace_string(replace_string(severityRaw, \"\\\"\", \"\"), \"'\", \"\"), \"[\", \"\"), \"]\", \"\"), \" \", \"\");\nlet severities = iif(\n  isempty(severityClean),\n  dynamic([\"High\", \"Medium\", \"Low\", \"Informational\"]),\n  split(severityClean, \",\")\n);\nlet AlertData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(severities, AlertSeverity)\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated) by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (print Message = \"ℹ️ 選択した条件でアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります\", AlertName = \"\", AlertSeverity = \"\", ProviderName = \"\", AlertCount = 0, LatestAlert = datetime(null) | where not(HasData))\n| project-away Message",
+        "query": "let startTime = todatetime(\"{TimeRange:start}\");\nlet endTime = todatetime(\"{TimeRange:end}\");\nlet severityList = \"High,Medium,Low,Informational\";  // ← 配列を文字列で保持\nlet severities = split(severityList, \",\");            // ← KQLで配列に変換\nlet AlertData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(severities, AlertSeverity)\n| summarize AlertCount = count(), LatestAlert = max(TimeGenerated)\n    by AlertName, AlertSeverity, ProviderName\n| order by AlertCount desc, LatestAlert desc;\nlet HasData = toscalar(AlertData | count) > 0;\nAlertData\n| union (\n    print Message = \"ℹ️ 選択した条件でアラートはありません。Defender Continuous Exportが有効な場合、データ反映に最大24時間かかります\",\n          AlertName = \"\",\n          AlertSeverity = \"\",\n          ProviderName = \"\",\n          AlertCount = 0,\n          LatestAlert = datetime(null)\n    | where not(HasData)\n)\n| project-away Message\n",
         "size": 0,
         "title": "Defender アラート (フィルター適用済)",
         "timeContext": {
@@ -360,7 +335,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let startTime = todatetime(\"{TimeRange:start}\");\nlet endTime = todatetime(\"{TimeRange:end}\");\nlet severityRaw = \"{AlertSeverity}\";\nlet severityClean = replace_string(replace_string(replace_string(replace_string(replace_string(severityRaw, \"\\\"\", \"\"), \"'\", \"\"), \"[\", \"\"), \"]\", \"\"), \" \", \"\");\nlet severities = iif(\n  isempty(severityClean),\n  dynamic([\"High\", \"Medium\", \"Low\", \"Informational\"]),\n  split(severityClean, \",\")\n);\nlet DensityData = SecurityAlert\n| where TimeGenerated between (startTime .. endTime)\n| where set_has_element(severities, AlertSeverity)\n| extend ResourceGroup = tostring(split(ResourceId, \"/\")[4])\n| where isnotempty(ResourceGroup)\n| summarize Alerts = count(), HighSeverity = countif(AlertSeverity == \"High\") by ResourceGroup\n| order by Alerts desc\n| take 10;\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (print Message = \"ℹ️ 選択した条件でアラートはありません\", ResourceGroup = \"\", Alerts = 0, HighSeverity = 0 | where not(HasData))\n| project-away Message",
+        "query": "let startTime = todatetime(\"{TimeRange:start}\");\nlet endTime   = todatetime(\"{TimeRange:end}\");\nlet severityText = trim(' ', tostring({AlertSeverity}));\nlet defaultSeverities = dynamic([\"High\", \"Medium\", \"Low\", \"Informational\"]);\nlet severities =\n    iif(severityText == \"\" or severityText == \"[]\",\n        defaultSeverities,\n        iif(severityText startswith \"[\",\n            parse_json(severityText),\n            parse_json(strcat(\"[\", severityText, \"]\"))\n        )\n    );\n\nlet DensityData =\n    SecurityAlert\n    | where TimeGenerated between (startTime .. endTime)\n    | where AlertSeverity in~ (severities)\n    | extend ResourceGroup = tostring(split(ResourceId, \"/\")[4])\n    | where isnotempty(ResourceGroup)\n    | summarize\n        Alerts        = count(),\n        HighSeverity  = countif(AlertSeverity == \"High\"),\n        MediumSeverity= countif(AlertSeverity == \"Medium\"),\n        LowSeverity   = countif(AlertSeverity == \"Low\"),\n        InfoSeverity  = countif(AlertSeverity == \"Informational\")\n      by ResourceGroup\n    | order by Alerts desc\n    | take 10;\n\nlet HasData = toscalar(DensityData | count) > 0;\nDensityData\n| union (\n    print ResourceGroup = \"\", Alerts = 0, HighSeverity = 0, MediumSeverity = 0,\n          LowSeverity = 0, InfoSeverity = 0,\n          Message = \"ℹ️ 選択した条件でアラートはありません\"\n    | where not(HasData)\n)\n| project-away Message",
         "size": 0,
         "title": "Defender アラート密度 (リソースグループ別)",
         "timeContext": {
@@ -390,9 +365,6 @@
         "query": "SecurityResources\n| where type == \"microsoft.security/assessments\"\n| extend RecommendationSeverity = tostring(properties.metadata.severity)\n| summarize Count = count() by RecommendationSeverity\n| order by Count desc",
         "size": 0,
         "title": "セキュリティ推奨事項 (重要度別)",
-        "timeContext": {
-          "durationMs": 86400000
-        },
         "queryType": 1,
         "resourceType": "microsoft.resourcegraph/resources",
         "visualization": "piechart"
@@ -400,6 +372,9 @@
       "name": "query-recommendations"
     }
   ],
-  "styleSettings": {},
-  "fromTemplateId": "sentinel-UserWorkbook"
+  "fallbackResourceIds": [
+    "/subscriptions/af0f28a5-faa0-4397-b1ab-ca2006a28e0c/resourcegroups/odl-candidate-sandbox-02-1948069/providers/microsoft.operationalinsights/workspaces/log-dev"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
