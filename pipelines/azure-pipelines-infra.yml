@@ -1,2 +1,0 @@
-# 現行の CI/CD は GitHub Actions へ統一済みです。
-# Azure DevOps (Classic pipelines) 向けサンプルは `Docs/legacy/pipelines/azure-pipelines-infra.yml` を参照してください。

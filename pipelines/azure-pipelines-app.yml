@@ -1,2 +1,0 @@
-# 現行のアプリ配信パイプラインは GitHub Actions で実装しています。
-# Azure DevOps 用の参考 YAML は `Docs/legacy/pipelines/azure-pipelines-app.yml` を参照してください。
