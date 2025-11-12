@@ -84,23 +84,60 @@ jobs:
             { title: 'Trivy Config (Bicep)', file: 'trivy-config.sarif' },
           ];
 
-          const loadSarif = (filePath) => {
-            if (!fs.existsSync(filePath)) {
-              const gzPath = `${filePath}.gz`;
-              if (!fs.existsSync(gzPath)) {
-                return null;
+          const resolveSarifPath = (basePath) => {
+            if (!basePath) return null;
+
+            const existsAndFile = (target) => fs.existsSync(target) && fs.statSync(target).isFile();
+            const existsAndDir = (target) => fs.existsSync(target) && fs.statSync(target).isDirectory();
+
+            if (existsAndFile(basePath)) {
+              return basePath;
+            }
+
+            const gzCandidate = `${basePath}.gz`;
+            if (existsAndFile(gzCandidate)) {
+              return gzCandidate;
+            }
+
+            if (existsAndDir(basePath)) {
+              const entries = fs.readdirSync(basePath)
+                .filter((name) => name.endsWith('.sarif') || name.endsWith('.sarif.gz'))
+                .sort();
+              if (entries.length > 0) {
+                return path.join(basePath, entries[0]);
               }
-              const buffer = zlib.gunzipSync(fs.readFileSync(gzPath));
+            }
+
+            return null;
+          };
+
+          const loadSarif = (filePath) => {
+            if (!filePath) {
+              return null;
+            }
+
+            const sarifPath = resolveSarifPath(filePath);
+            if (!sarifPath) {
+              return null;
+            }
+
+            if (sarifPath.endsWith('.gz')) {
+              const buffer = zlib.gunzipSync(fs.readFileSync(sarifPath));
               return JSON.parse(buffer.toString('utf-8'));
             }
 
-            return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+            if (!fs.statSync(sarifPath).isFile()) {
+              return null;
+            }
+
+            return JSON.parse(fs.readFileSync(sarifPath, 'utf-8'));
           };
 
           let anyReport = false;
 
           for (const report of reports) {
-            const sarif = loadSarif(path.join(process.cwd(), report.file));
+            const baseCandidate = path.join(process.cwd(), report.file);
+            const sarif = loadSarif(baseCandidate);
 
             append(`#### ${report.title}`);
 
